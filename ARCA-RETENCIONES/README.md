@@ -4,6 +4,24 @@ Parte del monorepo [`nakel_scripts`](../README.md): scripts y documentación par
 
 Este directorio contiene 3 archivos `.TXT` que se entregan al contador para presentar/armar retenciones (ARCA/DGR/SIRCAR).
 
+### Configuración Odoo (`config_nakel`)
+
+Los scripts **no** usan rutas absolutas fijas de tu máquina. Localizan la carpeta del proyecto buscando `SICORE/run_quincena.py` y cargan `config_nakel` así:
+
+1. Si existe **`NAKEL_CONFIG_ROOT`**: debe ser el directorio que contiene `config_nakel.py` (se añade a `PYTHONPATH` en caliente).
+2. Si no: se busca **`config_nakel.py`** subiendo directorios desde la raíz de `ARCA-RETENCIONES` (por ejemplo queda al lado de `nakel_scripts/` en tu layout habitual).
+
+Ejemplo para otra máquina o CI:
+
+```bash
+export NAKEL_CONFIG_ROOT=/ruta/al/directorio/con/config_nakel.py
+export NAKEL_TARGET=master_test   # opcional: ver config_nakel.py
+cd …/nakel_scripts/ARCA-RETENCIONES
+python3 SICORE/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15
+```
+
+**`.env` y contraseñas**: no van en este repo; `config_nakel.py` puede cargar `nakel/.env` según su propia lógica. Ocultar rutas del `.env` en el código **no rompe** los scripts: quien clone solo debe tener `config_nakel` + `.env` (o variables) en **su** entorno.
+
 ### Documentación
 
 - `Documentacion/arca-doc.md`: especificación SICORE 9.0 (posiciones/longitudes/reglas).

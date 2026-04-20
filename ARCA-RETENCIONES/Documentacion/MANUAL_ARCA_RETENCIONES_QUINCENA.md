@@ -36,6 +36,8 @@ python3 SIRCAR/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15 --cuit-agen
 
 Por defecto los scripts usan `config_nakel.ODOO_CONFIG_MASTER_DEV` (normalmente **producción**: `nakel.net.ar` / `master_dev`).
 
+Si en otra PC falla el import de `config_nakel`, definí **`NAKEL_CONFIG_ROOT`** apuntando al directorio que contiene `config_nakel.py` (ver README de `ARCA-RETENCIONES`).
+
 Para apuntar a **desarrollo** (`dev.nakel.net.ar` / `master_test`), exportá antes:
 
 ```bash

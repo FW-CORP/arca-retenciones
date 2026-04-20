@@ -26,13 +26,31 @@ from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Iterable
 
-CURSOR_FILES_ROOT = Path("/media/klap/raid5/cursor_files")
-sys.path.insert(0, str(CURSOR_FILES_ROOT))
+_ARCA_SEARCH = Path(__file__).resolve().parent
+while _ARCA_SEARCH != _ARCA_SEARCH.parent:
+    if (_ARCA_SEARCH / "SICORE" / "run_quincena.py").is_file():
+        break
+    _ARCA_SEARCH = _ARCA_SEARCH.parent
+else:
+    raise SystemExit(
+        "No se encontró la carpeta del proyecto (debe existir SICORE/run_quincena.py). "
+        "Ejecutá los scripts desde el clon …/ARCA-RETENCIONES/ (ver README)."
+    )
+sys.path.insert(0, str(_ARCA_SEARCH))
+
+try:
+    from nakel_import_paths import prepend_config_nakel_sys_path
+except Exception as e:  # pragma: no cover
+    raise SystemExit("Falta nakel_import_paths.py en la raíz de ARCA-RETENCIONES.") from e
+
+prepend_config_nakel_sys_path(_ARCA_SEARCH)
 
 try:
     from config_nakel import ODOO_CONFIG_MASTER_DEV  # type: ignore
 except Exception as e:  # pragma: no cover
-    raise SystemExit("No se pudo importar config_nakel.py") from e
+    raise SystemExit(
+        "No se pudo importar config_nakel (¿NAKEL_CONFIG_ROOT o PYTHONPATH?). Ver README de ARCA-RETENCIONES."
+    ) from e
 
 DEC3 = Decimal("0.001")
 DEC2 = Decimal("0.01")

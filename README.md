@@ -19,6 +19,7 @@ Cada bloque de trabajo convive en **su propia carpeta** en la raíz (monorepo si
 
 - **Sin secretos en el árbol**: no subir `.env`, claves API ni contraseñas; las salidas generadas (`**/out/`) están ignoradas por git.
 - **Un README por carpeta** que explique alcance, requisitos y comandos típicos.
+- **Sin rutas absolutas fijas** en scripts compartidos: cada subproyecto documenta cómo resolver `PYTHONPATH` / `config_nakel` (ej. `ARCA-RETENCIONES` usa `NAKEL_CONFIG_ROOT` o búsqueda hacia arriba de `config_nakel.py`).
 
 ## Clonar
 
