@@ -86,3 +86,9 @@ Para construir estos archivos desde Odoo, el “origen” suele ser **el pago a 
 - Confirmar **longitudes exactas** (posiciones) de `RGAN_CPA.TXT` y `RET-DGR-SIRCAR.TXT` comparando con especificación del organismo/aplicativo o con un export “oficial” del contador.
 - Identificar con certeza qué representan los códigos constantes `001` y `907` y el bloque `02170781`.
 
+### Seguridad y qué no va al repositorio
+
+- En este árbol **no** se versionan credenciales: los scripts leen `config_nakel` (fuera de esta carpeta) y/o variables de entorno (`nakel/.env`, etc.).
+- Las carpetas `**/out/` están en `.gitignore`: ahí suelen quedar **TXT/CSV/XLSX generados** con datos reales de Odoo (CUIT, montos). No los subas a un repo público sin revisar.
+- Los `.TXT` de muestra en la raíz / `Documentacion/` son referencia del estudio; pueden contener **CUIT de ejemplo** (no son contraseñas, pero sí datos fiscales de muestra).
+
