@@ -121,3 +121,18 @@ Para construir estos archivos desde Odoo, el “origen” suele ser **el pago a 
 - Las carpetas `**/out/` están en `.gitignore`: ahí suelen quedar **TXT/CSV/XLSX generados** con datos reales de Odoo (CUIT, montos). No los subas a un repo público sin revisar.
 - Los `.TXT` de muestra en la raíz / `Documentacion/` son referencia del estudio; pueden contener **CUIT de ejemplo** (no son contraseñas, pero sí datos fiscales de muestra).
 
+### Referencia: cliente legado GV2008 (export TXT desde el software viejo)
+
+En el cliente legado descargado en `GV2008/` (fuera de este repo), el “export a TXT” parece implementado **en el cliente** (EXE/DLL), usando consultas a la DB `Gestion` y luego escribiendo archivos.
+
+Hallazgos por strings (indicativos, no exhaustivos):
+
+- **`RET-DGR.TXT` / `RET-DGR-SIRCAR.TXT`**:
+  - Candidatos: `REP_CPA.dll` / `REP_CPA_antes*.dll`
+  - Acción de menú detectada: `EXP_RET_DGR_CHUBUT`
+- **`RGAN_CPA.TXT`**:
+  - Candidatos: `REP_CPA.dll` / `REP_CPA_antes*.dll`
+  - Export detectado: `EXP_RETEN_GANAN_CPA`
+- **Percepciones IVA (RG 5329)**:
+  - Acción de menú detectada: `EXP_SICORE_PERC_IVA5329`
+

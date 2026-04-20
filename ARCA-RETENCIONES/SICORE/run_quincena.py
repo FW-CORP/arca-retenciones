@@ -47,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         args.hasta,
         "--out",
         str(out),
+        "--layout",
+        "estandar132",
         "--codigo-operacion",
         str(args.codigo_operacion),
         *passthrough,
