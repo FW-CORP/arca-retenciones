@@ -4,7 +4,7 @@ Genera `RGAN_CPA.TXT` (ancho fijo) consultando Odoo `master_dev` por XML-RPC.
 
 Solo lectura: no escribe nada en Odoo.
 
-Layout inferido desde `arca-retenciones/RGAN_CPA.TXT` (len 145 por línea):
+Layout inferido desde `ARCA-RETENCIONES/RGAN_CPA.TXT` (len 145 por línea):
 
   0:2    tipo_registro = "06"
   2:12   fecha_1 (10)  = dd/mm/yyyy alineado a derecha (día 1 dígito -> espacio)

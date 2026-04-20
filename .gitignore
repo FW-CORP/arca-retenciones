@@ -1,15 +1,14 @@
-# Salidas generadas (pueden contener CUIT/importes reales desde Odoo)
+# Salidas generadas en cualquier subproyecto
 **/out/
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
-.Python
 .venv/
 venv/
 
-# Entornos / secretos (nunca versionar)
+# Secretos / entorno
 .env
 .env.*
 !.env.example

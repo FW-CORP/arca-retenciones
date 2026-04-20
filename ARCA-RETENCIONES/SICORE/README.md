@@ -9,7 +9,7 @@ Generar el **TXT SICORE v9** (retenciones **Ganancias**) desde Odoo por **XML-RP
 
 ## Uso habitual (quincena o cualquier rango)
 
-Desde la carpeta `arca-retenciones/`:
+Desde la carpeta del clon `nakel_scripts/ARCA-RETENCIONES/`:
 
 ```bash
 python3 SICORE/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD

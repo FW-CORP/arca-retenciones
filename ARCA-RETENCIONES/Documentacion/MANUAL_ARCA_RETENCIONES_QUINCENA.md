@@ -9,7 +9,7 @@ Este proyecto genera archivos para **ARCA / certificaciones** a partir de retenc
 
 ## Qué tenés que usar el 99% del tiempo
 
-| Objetivo | Comando (desde la carpeta `arca-retenciones/`) | Archivo generado |
+| Objetivo | Comando (desde la carpeta del clon `nakel_scripts/ARCA-RETENCIONES/`) | Archivo generado |
 |----------|-----------------------------------------------|------------------|
 | **SICORE — Ganancias** (TXT importación) | `python3 SICORE/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD` | `SICORE/out/SICORE_V9_RET_GAN_YYYY-MM-DD_a_YYYY-MM-DD.TXT` |
 | **SIRCAR — IIBB** (TXT 163 posiciones) | `python3 SIRCAR/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD --cuit-agente 30XXXXXXXXX` | `SIRCAR/out/SIRCAR_163_YYYY-MM-DD_a_YYYY-MM-DD.TXT` |
@@ -17,7 +17,7 @@ Este proyecto genera archivos para **ARCA / certificaciones** a partir de retenc
 ### Ejemplos (quincenas)
 
 ```bash
-cd /media/klap/raid5/cursor_files/nakel/arca-retenciones
+cd /media/klap/raid5/cursor_files/nakel/nakel_scripts/ARCA-RETENCIONES
 
 # 1 al 15 de abril
 python3 SICORE/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15

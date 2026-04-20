@@ -9,14 +9,14 @@ Documentar de forma **canónica** cómo se construyen los TXT de retenciones usa
 
 Este documento unifica:
 - La especificación de **SICORE 9.0** (`arca-doc.md`).
-- Los **layouts reales** observados en los TXT del directorio `arca-retenciones/`.
+- Los **layouts reales** observados en los TXT del directorio `ARCA-RETENCIONES/`.
 - El **mapeo de datos** contra Odoo 18 Argentina (retenciones registradas en pagos).
 
 ---
 
 ## Fuente de verdad (ARCA / SICORE)
 
-Ver `arca-retenciones/Documentacion/arca-doc.md` (SICORE 9.0). Puntos críticos:
+Ver `ARCA-RETENCIONES/Documentacion/arca-doc.md` (SICORE 9.0). Puntos críticos:
 
 - **Encoding**: ASCII/ANSI.
 - **Fin de línea**: **CRLF** (Windows) al final de cada registro.
@@ -51,7 +51,7 @@ Ver `arca-retenciones/Documentacion/arca-doc.md` (SICORE 9.0). Puntos críticos:
 
 ## Inventario de archivos y su rol
 
-En `arca-retenciones/` se manejan 3 TXT (muestras del contador):
+En `ARCA-RETENCIONES/` se manejan 3 TXT (muestras del contador):
 
 1) **`RET-DGR-SIRCAR.TXT`** (CSV)
 - 1 línea = 1 retención.
@@ -162,19 +162,19 @@ Puntos críticos:
 
 Scripts ya creados (solo consulta a `master_dev`):
 
-- `arca-retenciones/SIRCAR/tools/generar_ret_dgr_master_dev.py`
-  - Genera **CSV** tipo `RET-DGR-SIRCAR.TXT` en `arca-retenciones/SIRCAR/out/RET-DGR.TXT` (CSV).
+- `ARCA-RETENCIONES/SIRCAR/tools/generar_ret_dgr_master_dev.py`
+  - Genera **CSV** tipo `RET-DGR-SIRCAR.TXT` en `ARCA-RETENCIONES/SIRCAR/out/RET-DGR.TXT` (CSV).
 
-- `arca-retenciones/SIRCAR/tools/generar_ret_dgr_ancho_fijo_master_dev.py`
-  - Genera **ancho fijo** tipo `RET-DGR.TXT` en `arca-retenciones/SIRCAR/out/RET-DGR.TXT`.
+- `ARCA-RETENCIONES/SIRCAR/tools/generar_ret_dgr_ancho_fijo_master_dev.py`
+  - Genera **ancho fijo** tipo `RET-DGR.TXT` en `ARCA-RETENCIONES/SIRCAR/out/RET-DGR.TXT`.
 
-- `arca-retenciones/SICORE/tools/generar_rgan_cpa_master_dev.py`
-  - Genera **ancho fijo 145** tipo `RGAN_CPA.TXT` en `arca-retenciones/SICORE/out/RGAN_CPA.TXT`.
+- `ARCA-RETENCIONES/SICORE/tools/generar_rgan_cpa_master_dev.py`
+  - Genera **ancho fijo 145** tipo `RGAN_CPA.TXT` en `ARCA-RETENCIONES/SICORE/out/RGAN_CPA.TXT`.
 
-- `arca-retenciones/SIRCAR/tools/generar_sircar_mayor_odoo_master_dev.py`
-  - Genera **extracto tipo mayor** para **IIBB / SIRCAR** en `arca-retenciones/SIRCAR/out/` (CSV).
+- `ARCA-RETENCIONES/SIRCAR/tools/generar_sircar_mayor_odoo_master_dev.py`
+  - Genera **extracto tipo mayor** para **IIBB / SIRCAR** en `ARCA-RETENCIONES/SIRCAR/out/` (CSV).
 
-- `arca-retenciones/SICORE/generar_sicore_v9_retenciones.py`
+- `ARCA-RETENCIONES/SICORE/generar_sicore_v9_retenciones.py`
   - Genera **SICORE / importación retenciones Ganancias** en **`SICORE/out/SICORE_V9_RETENCIONES_GANANCIAS.TXT`**: registro de **159** posiciones + CRLF (cola 131–159; último carácter **un espacio** según grilla importación).
   - **N° comprobante (16)**: solo dígitos; **4** = punto de venta + **12** = número (sin guiones). Textos internos Odoo (FACOM…) no son válidos fiscalmente: se arman dígitos desde `2526-30010` o solo dígitos del dato.
   - **Impuesto + régimen**: `0217` (4) + régimen **3** dígitos (p. ej. `078`) desde `account.tax.l10n_ar_code` (últimos 3 dígitos numéricos). El estándar de 132 posiciones en `arca-doc.md` usa régimen en **4** posiciones; aquí se compacta a 3 para cerrar el registro con la cola del estudio.
@@ -241,15 +241,15 @@ Guía de Florencia (19/04/2026) para detectar líneas “cortas” o con corrimi
 - **Campo 17 al 19 (Rellenos)**: **18** ceros (pos. **141–158**).
 - **Campo 20 (Final)**: **1 espacio** (pos. **159**).
 
-- `arca-retenciones/SICORE/tools/generar_op_odoo_master_dev.py`
+- `ARCA-RETENCIONES/SICORE/tools/generar_op_odoo_master_dev.py`
   - Genera **`SICORE/out/OP_odoo.xlsx`** (misma grilla que `nuevos documetnos/OP.xlsx`) desde `account.payment` + retenciones.
   - **Cheques de terceros vs efectivo**: Odoo puede marcar el diario “Cheques de Terceros” con **tipo cash**; para la planilla se usa **`account.journal.code`** (ej. `CHQS` → columna *Cheques Terceros*, `EFVO` → *Efectivo*) y el prefijo del pago (ej. `PCHQS/…`).
 
-- `arca-retenciones/SICORE/tools/generar_ret_gan_mayor_odoo_master_dev.py`
+- `ARCA-RETENCIONES/SICORE/tools/generar_ret_gan_mayor_odoo_master_dev.py`
   - Genera **`SICORE/out/RET_GAN_odoo.xlsx`** (estructura tipo `nuevos documetnos/RET GAN 16-03.xlsx`): **mayor de líneas** con `tax_line_id` en impuestos **`l10n_ar_tax_type = earnings`** (retención Ganancias), con **S.Ini.** = suma debe/haber antes del `--desde`.
   - Nota Odoo 18: esas líneas suelen tener `display_type = product` (no se filtra `display_type=False`).
 
-- `arca-retenciones/SIRCAR/tools/generar_ret_iibb_mayor_odoo_master_dev.py`
+- `ARCA-RETENCIONES/SIRCAR/tools/generar_ret_iibb_mayor_odoo_master_dev.py`
   - Genera **`SIRCAR/out/RET_IIBB_odoo.xlsx`** (estructura tipo `nuevos documetnos/RETIIBB.xlsx`): **mayor de líneas** con `tax_line_id` en impuestos IIBB/SIRCAR (por `l10n_ar_tax_type ilike iibb` o `name ilike IIBB/SIRCAR`), con **S.Ini.** = suma debe/haber antes del `--desde`.
 
 Todos:
