@@ -1,0 +1,22 @@
+# Salidas generadas (pueden contener CUIT/importes reales desde Odoo)
+**/out/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+
+# Entornos / secretos (nunca versionar)
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
