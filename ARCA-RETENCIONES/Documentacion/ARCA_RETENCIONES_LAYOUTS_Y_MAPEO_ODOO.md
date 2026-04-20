@@ -47,6 +47,10 @@ Ver `ARCA-RETENCIONES/Documentacion/arca-doc.md` (SICORE 9.0). Puntos críticos:
 
 **Nota**: Los TXT locales (`RET-DGR.TXT`, `RET-DGR-SIRCAR.TXT`, `RGAN_CPA.TXT`) no son “idénticos” al estándar de 132; parecen ser **layouts de importación/salida del estudio** (o pre-SICORE / parametrizados). Por eso, la estrategia es: **replicar los layouts reales** y validar por importación.
 
+### ARCA — Percepciones IIBB (TXT 163)
+
+Carpeta **`PERCEIIBB/` en la raíz del clon** (salida `PERCEIIBB/out/`): mismo **ancho 163** que SIRCAR retenciones, con **tipo registro `2`**, fecha según **factura de venta**, tipo comprobante **F/D/C** y líneas de impuesto de **percepción** en facturas de cliente (`account.move` + `account.move.line.tax_line_id`). Detalle: `PERCEIIBB/README.md` y `generar_perceiibb_arca_master_dev.py`.
+
 ---
 
 ## Inventario de archivos y su rol
@@ -242,15 +246,15 @@ Guía de Florencia (19/04/2026) para detectar líneas “cortas” o con corrimi
 - **Campo 20 (Final)**: **1 espacio** (pos. **159**).
 
 - `ARCA-RETENCIONES/SICORE/tools/generar_op_odoo_master_dev.py`
-  - Genera **`SICORE/out/OP_odoo.xlsx`** (misma grilla que `nuevos documetnos/OP.xlsx`) desde `account.payment` + retenciones.
+  - Genera **`SICORE/out/OP_odoo.xlsx`** (misma grilla que `Documentacion/OP.xlsx`) desde `account.payment` + retenciones.
   - **Cheques de terceros vs efectivo**: Odoo puede marcar el diario “Cheques de Terceros” con **tipo cash**; para la planilla se usa **`account.journal.code`** (ej. `CHQS` → columna *Cheques Terceros*, `EFVO` → *Efectivo*) y el prefijo del pago (ej. `PCHQS/…`).
 
 - `ARCA-RETENCIONES/SICORE/tools/generar_ret_gan_mayor_odoo_master_dev.py`
-  - Genera **`SICORE/out/RET_GAN_odoo.xlsx`** (estructura tipo `nuevos documetnos/RET GAN 16-03.xlsx`): **mayor de líneas** con `tax_line_id` en impuestos **`l10n_ar_tax_type = earnings`** (retención Ganancias), con **S.Ini.** = suma debe/haber antes del `--desde`.
+  - Genera **`SICORE/out/RET_GAN_odoo.xlsx`** (estructura tipo `Documentacion/RET GAN 16-03.xlsx`): **mayor de líneas** con `tax_line_id` en impuestos **`l10n_ar_tax_type = earnings`** (retención Ganancias), con **S.Ini.** = suma debe/haber antes del `--desde`.
   - Nota Odoo 18: esas líneas suelen tener `display_type = product` (no se filtra `display_type=False`).
 
 - `ARCA-RETENCIONES/SIRCAR/tools/generar_ret_iibb_mayor_odoo_master_dev.py`
-  - Genera **`SIRCAR/out/RET_IIBB_odoo.xlsx`** (estructura tipo `nuevos documetnos/RETIIBB.xlsx`): **mayor de líneas** con `tax_line_id` en impuestos IIBB/SIRCAR (por `l10n_ar_tax_type ilike iibb` o `name ilike IIBB/SIRCAR`), con **S.Ini.** = suma debe/haber antes del `--desde`.
+  - Genera **`SIRCAR/out/RET_IIBB_odoo.xlsx`** (estructura tipo `Documentacion/RETIIBB.xlsx`): **mayor de líneas** con `tax_line_id` en impuestos IIBB/SIRCAR (por `l10n_ar_tax_type ilike iibb` o `name ilike IIBB/SIRCAR`), con **S.Ini.** = suma debe/haber antes del `--desde`.
 
 Todos:
 - usan `config_nakel.ODOO_CONFIG_MASTER_DEV`

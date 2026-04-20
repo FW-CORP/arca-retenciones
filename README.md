@@ -8,7 +8,7 @@ Cada bloque de trabajo convive en **su propia carpeta** en la raíz (monorepo si
 
 | Carpeta | Descripción |
 |---------|-------------|
-| [`ARCA-RETENCIONES/`](ARCA-RETENCIONES/README.md) | Exportes **ARCA / SICORE (Ganancias)** y **SIRCAR / IIBB** desde Odoo (solo lectura), layouts de retenciones y manual de uso por rango de fechas. |
+| [`ARCA-RETENCIONES/`](ARCA-RETENCIONES/README.md) | **Retenciones** SICORE/SIRCAR + **percepciones** IIBB (`PERCEIIBB/`), plantillas y documentación en un solo árbol. |
 
 ## Cómo usar un subproyecto
 

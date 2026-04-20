@@ -1,6 +1,6 @@
 ## ARCA Retenciones – análisis de layouts (TXT)
 
-Parte del monorepo [`nakel_scripts`](../README.md): scripts y documentación para exportes **ARCA / SICORE / SIRCAR** desde Odoo (solo lectura).
+Parte del monorepo [`nakel_scripts`](../README.md): scripts y documentación para exportes **ARCA / SICORE / SIRCAR** desde Odoo (solo lectura). Las **percepciones IIBB** están en [`PERCEIIBB/README.md`](PERCEIIBB/README.md) (misma carpeta `ARCA-RETENCIONES/`).
 
 Este directorio contiene 3 archivos `.TXT` que se entregan al contador para presentar/armar retenciones (ARCA/DGR/SIRCAR).
 
@@ -27,17 +27,24 @@ python3 SICORE/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15
 - `Documentacion/arca-doc.md`: especificación SICORE 9.0 (posiciones/longitudes/reglas).
 - `Documentacion/ARCA_RETENCIONES_LAYOUTS_Y_MAPEO_ODOO.md`: guía unificada (layouts reales + mapeo a Odoo + scripts solo lectura).
 - `Documentacion/MANUAL_ARCA_RETENCIONES_QUINCENA.md`: **manual corto** (quincena / rango de fechas, comandos `run_quincena`).
+- Plantillas de referencia del estudio (XLSX / capturas): `Documentacion/OP.xlsx`, `Documentacion/RET GAN 16-03.xlsx`, `Documentacion/RETIIBB.xlsx`, `Documentacion/Pasted Image.png`, `Documentacion/Formato de Importacion.pdf`.
 
 ### Uso habitual (certificado / quincena)
 
-Desde esta carpeta:
+**Retenciones** — desde esta carpeta (`ARCA-RETENCIONES/`):
 
 ```bash
 python3 SICORE/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD
 python3 SIRCAR/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD --cuit-agente 30XXXXXXXXX
 ```
 
-Salidas: `SICORE/out/` y `SIRCAR/out/` (nombres con rango de fechas).
+**Percepciones IIBB** — desde esta misma carpeta (`ARCA-RETENCIONES/`):
+
+```bash
+python3 PERCEIIBB/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD --cuit-agente 30XXXXXXXXX
+```
+
+Salidas: `SICORE/out/`, `SIRCAR/out/` y `PERCEIIBB/out/`.
 
 ### Scripts (Odoo `master_dev`, solo lectura)
 
@@ -56,6 +63,8 @@ Todos leen de `config_nakel.ODOO_CONFIG_MASTER_DEV` salvo anotación contraria.
 | `SIRCAR/tools/generar_ret_iibb_mayor_odoo_master_dev.py` | `SIRCAR/out/RET_IIBB_odoo.xlsx` | Mayor ret. IIBB/SIRCAR |
 | `SIRCAR/tools/generar_ret_dgr_master_dev.py` | `SIRCAR/out/RET-DGR.TXT` (CSV tipo SIRCAR) | DGR/IIBB en CSV (layout estudio) |
 | `SIRCAR/tools/generar_ret_dgr_ancho_fijo_master_dev.py` | `SIRCAR/out/RET-DGR.TXT` (ancho fijo) | DGR layout contador |
+| `PERCEIIBB/run_quincena.py` | `PERCEIIBB/out/PERCEIIBB_ARCA_…TXT` | Atajo: percepciones IIBB **163** |
+| `PERCEIIBB/generar_perceiibb_arca_master_dev.py` | `PERCEIIBB/out/PERCEIIBB_ARCA.TXT` | Percepciones IIBB ARCA (misma longitud que SIRCAR 163; campo 1 = `2`) |
 
 ### Archivos
 

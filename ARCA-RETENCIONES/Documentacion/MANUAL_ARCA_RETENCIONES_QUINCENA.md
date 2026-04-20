@@ -13,6 +13,9 @@ Este proyecto genera archivos para **ARCA / certificaciones** a partir de retenc
 |----------|-----------------------------------------------|------------------|
 | **SICORE — Ganancias** (TXT importación) | `python3 SICORE/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD` | `SICORE/out/SICORE_V9_RET_GAN_YYYY-MM-DD_a_YYYY-MM-DD.TXT` |
 | **SIRCAR — IIBB** (TXT 163 posiciones) | `python3 SIRCAR/run_quincena.py --desde YYYY-MM-DD --hasta YYYY-MM-DD --cuit-agente 30XXXXXXXXX` | `SIRCAR/out/SIRCAR_163_YYYY-MM-DD_a_YYYY-MM-DD.TXT` |
+| **ARCA — Percepciones IIBB** (TXT 163; campo 1 = `2`) | Ver ejemplo abajo (cwd = **raíz** del clon `arca-retenciones/`) | `PERCEIIBB/out/PERCEIIBB_ARCA_YYYY-MM-DD_a_YYYY-MM-DD.TXT` |
+
+**Nota cwd**: SICORE y SIRCAR suelen ejecutarse desde `ARCA-RETENCIONES/`. **PERCEIIBB** está en la **raíz del clon** (al lado de `ARCA-RETENCIONES/`): ahí conviven las carpetas `SICORE/`, `SIRCAR/` y `PERCEIIBB/`.
 
 ### Ejemplos (quincenas)
 
@@ -30,6 +33,13 @@ SIRCAR (mismo criterio de fechas; el CUIT es el del **agente de retención**):
 
 ```bash
 python3 SIRCAR/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15 --cuit-agente 30500000000
+```
+
+Percepciones IIBB (fecha según **factura de venta** en el rango; CUIT del **agente de percepción**):
+
+```bash
+cd …/arca-retenciones
+python3 PERCEIIBB/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15 --cuit-agente 30500000000
 ```
 
 ## Contra qué base de Odoo corre
