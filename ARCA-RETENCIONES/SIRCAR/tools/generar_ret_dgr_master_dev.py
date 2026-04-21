@@ -84,6 +84,12 @@ def _fmt_rate(x: Any) -> str:
     return "0.00" if s in ("-0.00", "-0,00") else s
 
 
+def _calc_importe_from_base_rate(base: Decimal, rate_percent: Any) -> Decimal:
+    # Importante: SIAP valida con alícuota a 2 decimales (como se exporta).
+    rate = _d2(rate_percent).quantize(DEC2, rounding=ROUND_HALF_UP)
+    return (base * rate / Decimal("100")).quantize(DEC2, rounding=ROUND_HALF_UP)
+
+
 def _digits_only(s: str) -> str:
     return re.sub(r"\D+", "", s or "")
 
@@ -360,8 +366,9 @@ def generar(
 
             if por_factura and bill_list:
                 base_parts = _alloc_by_weights(base, weights)
-                imp_parts = _alloc_by_weights(importe, weights)
-                for bp, ip in zip(base_parts, imp_parts, strict=False):
+                for bp in base_parts:
+                    # Importante: SIAP valida que retenido == base * alicuota / 100.
+                    ip = _calc_importe_from_base_rate(bp, tax.get("amount"))
                     reg += 1
                     nro_registro = str(reg).zfill(5)
                     filas.append(

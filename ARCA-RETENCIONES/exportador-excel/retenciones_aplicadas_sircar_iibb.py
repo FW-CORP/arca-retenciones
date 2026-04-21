@@ -13,7 +13,7 @@ import csv
 import re
 import sys
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Iterable
 
@@ -201,16 +201,17 @@ def main(argv: Iterable[str] | None = None) -> int:
         partner_id = int(pay["partner_id"][0]) if pay.get("partner_id") else 0
         partner = partners.get(partner_id, {})
         base_total = abs_money(l.get("tax_base_amount"))
+        # alícuota a 2 decimales (como se exporta)
         rate = abs_money(tax.get("amount"))
-        importe_total = calc_importe_from_base_rate(base_total, tax.get("amount"))
 
         bill_list = [bills_by_id.get(int(bid), {}) for bid in (pay.get("reconciled_bill_ids") or [])]
         bill_list = [b for b in bill_list if b and (b.get("move_type") in ("in_invoice", "in_refund"))]
         if bill_list:
             weights = [abs_money(b.get("amount_total")) for b in bill_list]
             base_parts = _alloc_by_weights(base_total, weights)
-            imp_parts = _alloc_by_weights(importe_total, weights)
-            for b, bp, ip in zip(bill_list, base_parts, imp_parts, strict=False):
+            for b, bp in zip(bill_list, base_parts, strict=False):
+                # para consistencia con validaciones: importe = base * alícuota / 100 (con alícuota 2 dec)
+                ip = (bp * rate / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 out_rows.append(
                     (
                         RetencionRow(
@@ -230,6 +231,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     )
                 )
         else:
+            importe_total = (base_total * rate / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             out_rows.append(
                 (
                     RetencionRow(

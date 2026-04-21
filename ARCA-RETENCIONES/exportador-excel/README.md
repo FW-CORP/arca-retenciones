@@ -24,6 +24,7 @@ Desde `ARCA-RETENCIONES/`:
 ```bash
 python3 exportador-excel/retenciones_aplicadas_sircar_iibb.py --desde 2026-04-01 --hasta 2026-04-15
 python3 exportador-excel/retenciones_sufridas_iibb.py --desde 2026-04-01 --hasta 2026-04-15
+python3 exportador-excel/retenciones_ganancias_rgan_cpa.py --desde 2026-04-01 --hasta 2026-04-15
 ```
 
 Salidas: `exportador-excel/out/*.xlsx`
