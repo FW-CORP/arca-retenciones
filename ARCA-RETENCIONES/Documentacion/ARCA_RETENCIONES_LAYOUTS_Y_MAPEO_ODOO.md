@@ -137,6 +137,9 @@ Detalle observado (longitudes reales del layout del contador):
 ### C) `RGAN_CPA.TXT` (ancho fijo 145)
 
 Este layout se parece al caso SICORE/Ganancias (código impuesto 0217) pero con campos del estudio:
+
+- **Terminador de línea**: usar **CRLF** (`\r\n`) como en las muestras (SIAP/SICORE puede rechazar el archivo si no coincide el “largo de registro” esperado).
+- **`nro_orden` (pos. 17–28, 12 chars)**: se compone como **PV(4) + NRO(8)** tomado de la **factura proveedor** (`account.move.ref` tipo `0388-00386471`). Si no hay `PV-NRO` parseable, se usa fallback numérico.
 - `codigo_8` observado: `02170781`
 - `jurisd_3` observado: `010`
 - `cuit13` observado: `80` + CUIT(11)

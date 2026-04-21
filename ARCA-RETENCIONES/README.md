@@ -65,6 +65,8 @@ Todos leen de `config_nakel.ODOO_CONFIG_MASTER_DEV` salvo anotación contraria.
 | `SIRCAR/tools/generar_ret_dgr_ancho_fijo_master_dev.py` | `SIRCAR/out/RET-DGR.TXT` (ancho fijo) | DGR layout contador |
 | `PERCEIIBB/run_quincena.py` | `PERCEIIBB/out/PERCEIIBB_ARCA_…TXT` | Atajo: percepciones IIBB **163** |
 | `PERCEIIBB/generar_perceiibb_arca_master_dev.py` | `PERCEIIBB/out/PERCEIIBB_ARCA.TXT` | Percepciones IIBB ARCA (misma longitud que SIRCAR 163; campo 1 = `2`) |
+| `exportador-excel/retenciones_aplicadas_sircar_iibb.py` | `exportador-excel/out/retenciones_aplicadas_sircar_iibb_…xlsx` | Excel: retenciones aplicadas IIBB/SIRCAR (misma data que `RET-DGR-SIRCAR.TXT`) |
+| `exportador-excel/retenciones_sufridas_iibb.py` | `exportador-excel/out/retenciones_sufridas_iibb_…xlsx` | Excel: IIBB sufrida en compras (facturas proveedor `in_invoice/in_refund`) |
 
 ### Archivos
 

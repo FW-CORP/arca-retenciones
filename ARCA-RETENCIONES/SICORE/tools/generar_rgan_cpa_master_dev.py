@@ -100,9 +100,10 @@ def _normalize_payment_name_no_separators(name: str, *, max_len: int = 12) -> st
 
 def _fmt_date_ddmmyyyy_right(iso_date: str, width: int = 10) -> str:
     dt = datetime.strptime(iso_date, "%Y-%m-%d").date()
-    s = dt.strftime("%d/%m/%Y").lstrip("0")  # 02 -> 2 para parecerse al original
-    # si quedó "2/03/2026" (9 chars) lo alineamos a derecha en 10
-    return s.rjust(width)
+    # En la muestra de marzo (1–15) las fechas se ven como dd/mm/yyyy (siempre 10 chars),
+    # sin alineación con espacios.
+    s = dt.strftime("%d/%m/%Y")
+    return s[:width].ljust(width)
 
 
 def _fmt_num_coma(x: Decimal, *, decimals: int) -> str:
@@ -115,6 +116,64 @@ def _fmt_num_coma(x: Decimal, *, decimals: int) -> str:
 
 def _fmt_field_right(value: str, width: int) -> str:
     return (value or "").rjust(width)[:width]
+
+_PV_NRO_RE = re.compile(r"^\s*(\d{1,5})\s*-\s*(\d{1,10})\s*$")
+
+
+def _pv_nro_12_from_bill(bill: dict) -> str:
+    """
+    nro_orden (12) = PV(4) + NRO(8), ej: 00010000067241.
+    Se toma preferentemente de `ref` (suele venir como 0388-00386471).
+    Fallbacks: `l10n_latam_document_number` y `name`.
+    """
+    for k in ("ref", "l10n_latam_document_number", "name"):
+        s = str(bill.get(k) or "").strip()
+        m = _PV_NRO_RE.match(s)
+        if not m:
+            continue
+        pv = m.group(1).zfill(4)[-4:]
+        nro = m.group(2).zfill(8)[-8:]
+        return pv + nro
+    # último recurso: id numérico
+    try:
+        return str(int(bill.get("id") or 0)).zfill(12)[:12]
+    except Exception:
+        return "0".zfill(12)
+
+
+def _fmt_codigo8_like_marzo(code: str) -> str:
+    """
+    En la muestra de marzo el campo (8) aparece como `2170781 ` (7 dígitos + 1 espacio),
+    no como `02170781`. Replicamos ese comportamiento para el valor 2170781.
+    """
+    s = str(code or "").strip()
+    if s.isdigit() and int(s) == 2170781:
+        return "2170781 "
+    # fallback estándar: 8 dígitos
+    return s.zfill(8)[:8]
+
+
+def _alloc_by_weights(total: Decimal, weights: list[Decimal], *, q: Decimal) -> list[Decimal]:
+    """
+    Prorratea `total` según `weights`, cuantizando con `q` y garantizando suma exacta.
+    """
+    if not weights:
+        return []
+    s = sum(weights)
+    if s <= Decimal("0"):
+        out = [Decimal("0")] * len(weights)
+        out[0] = total.quantize(q, rounding=ROUND_HALF_UP)
+        return out
+    out: list[Decimal] = []
+    acc = Decimal("0")
+    for i, w in enumerate(weights):
+        if i == len(weights) - 1:
+            v = (total - acc).quantize(q, rounding=ROUND_HALF_UP)
+        else:
+            v = (total * w / s).quantize(q, rounding=ROUND_HALF_UP)
+            acc += v
+        out.append(v)
+    return out
 
 
 def odoo_connect(cfg: dict) -> tuple[Any, int]:
@@ -171,7 +230,7 @@ def generar(
         "account.payment",
         "read",
         [pay_ids],
-        {"fields": ["id", "name", "date", "partner_id", "amount", "l10n_ar_withholding_ids"]},
+        {"fields": ["id", "name", "date", "partner_id", "amount", "l10n_ar_withholding_ids", "reconciled_bill_ids"]},
     )
 
     partner_ids = sorted({p["partner_id"][0] for p in pays if p.get("partner_id")})
@@ -198,6 +257,20 @@ def generar(
         [line_ids],
         {"fields": ["id", "payment_id", "tax_line_id", "tax_base_amount", "balance", "credit"]},
     )
+
+    bill_ids = sorted({bid for p in pays for bid in (p.get("reconciled_bill_ids") or [])})
+    bills_by_id: dict[int, dict] = {}
+    if bill_ids:
+        br = models.execute_kw(
+            db,
+            uid,
+            pwd,
+            "account.move",
+            "read",
+            [bill_ids],
+            {"fields": ["id", "move_type", "amount_total", "ref", "name", "l10n_latam_document_number"]},
+        )
+        bills_by_id = {int(b["id"]): b for b in br}
 
     lines_by_payment: dict[int, list[dict]] = {}
     for l in lines:
@@ -226,45 +299,79 @@ def generar(
         cuit13 = ("80" + cuit11) if len(cuit11) == 11 else "80".ljust(13, "0")
 
         fecha = _fmt_date_ddmmyyyy_right(p["date"], 10)
-        # nro_orden 12: usamos payment.name normalizado (sin / ni -) para alinearnos a SICORE "sin separadores".
-        nro_orden = _normalize_payment_name_no_separators(p.get("name") or "", max_len=12).rjust(12, "0") or str(pid).zfill(12)
-
-        imp_total = _abs_money(p.get("amount"), DEC3)
-        imp_total_s = _fmt_field_right(_fmt_num_coma(imp_total, decimals=3), 12)
+        # Desagregado por operación (factura proveedor reconciliada): 1 línea por factura.
+        bill_list = [bills_by_id.get(int(bid), {}) for bid in (p.get("reconciled_bill_ids") or [])]
+        bill_list = [b for b in bill_list if b and (b.get("move_type") in ("in_invoice", "in_refund"))]
 
         base_fecha = p["date"]
         fecha2 = _fmt_date_ddmmyyyy_right(base_fecha, 10)
         fecha3 = _fmt_date_ddmmyyyy_right(base_fecha, 10)
 
         for l in sorted(wlines, key=lambda r: int(r["id"])):
-            base = _abs_money(l.get("tax_base_amount"), DEC2)
-            reten = _abs_money(l.get("credit") or l.get("balance") or 0, DEC2)
-            if reten == Decimal("0.00"):
-                reten = _abs_money(l.get("balance"), DEC2)
+            base_total = _abs_money(l.get("tax_base_amount"), DEC2)
+            reten_total = _abs_money(l.get("credit") or l.get("balance") or 0, DEC2)
+            if reten_total == Decimal("0.00"):
+                reten_total = _abs_money(l.get("balance"), DEC2)
 
-            base_s = _fmt_field_right(_fmt_num_coma(base, decimals=2), 13)
-            reten_s = _fmt_field_right(_fmt_num_coma(reten, decimals=2), 14)
+            if bill_list:
+                weights = [_abs_money(b.get("amount_total"), DEC2) for b in bill_list]
+                base_parts = _alloc_by_weights(base_total, weights, q=DEC2)
+                reten_parts = _alloc_by_weights(reten_total, weights, q=DEC2)
+                for b, base, reten in zip(bill_list, base_parts, reten_parts, strict=False):
+                    # nro_orden 12: usar identificador numérico por factura (evitar PGAL/...)
+                    nro_orden = _pv_nro_12_from_bill(b)[:12]
+                    imp_total = _abs_money(b.get("amount_total"), DEC3)
+                    imp_total_s = _fmt_field_right(_fmt_num_coma(imp_total, decimals=3), 12)
+                    base_s = _fmt_field_right(_fmt_num_coma(base, decimals=2), 13)
+                    reten_s = _fmt_field_right(_fmt_num_coma(reten, decimals=2), 14)
 
-            line = (
-                "06"
-                + fecha
-                + str(sucursal).zfill(4)[:4]
-                + nro_orden
-                + (" " * 5)
-                + imp_total_s
-                + str(codigo_8).zfill(8)[:8]
-                + base_s
-                + fecha2
-                + str(jurisd_3).zfill(3)[:3]
-                + reten_s
-                + (" " * 2)
-                + "0,00"
-                + fecha3
-                + cuit13[:13]
-                + (" " * 9)
-                + ("0" * 14)
-            )
-            out_lines.append(line[:145].ljust(145))
+                    line = (
+                        "06"
+                        + fecha
+                        + str(sucursal).zfill(4)[:4]
+                        + nro_orden
+                        + (" " * 5)
+                        + imp_total_s
+                        + _fmt_codigo8_like_marzo(codigo_8)
+                        + base_s
+                        + fecha2
+                        + str(jurisd_3).zfill(3)[:3]
+                        + reten_s
+                        + (" " * 2)
+                        + "0,00"
+                        + fecha3
+                        + cuit13[:13]
+                        + (" " * 9)
+                        + ("0" * 14)
+                    )
+                    out_lines.append(line[:145].ljust(145))
+            else:
+                # fallback: sin facturas reconciliadas → comportamiento anterior (por pago)
+                nro_orden = _normalize_payment_name_no_separators(p.get("name") or "", max_len=12).rjust(12, "0") or str(pid).zfill(12)
+                imp_total = _abs_money(p.get("amount"), DEC3)
+                imp_total_s = _fmt_field_right(_fmt_num_coma(imp_total, decimals=3), 12)
+                base_s = _fmt_field_right(_fmt_num_coma(base_total, decimals=2), 13)
+                reten_s = _fmt_field_right(_fmt_num_coma(reten_total, decimals=2), 14)
+                line = (
+                    "06"
+                    + fecha
+                    + str(sucursal).zfill(4)[:4]
+                    + nro_orden
+                    + (" " * 5)
+                    + imp_total_s
+                    + _fmt_codigo8_like_marzo(codigo_8)
+                    + base_s
+                    + fecha2
+                    + str(jurisd_3).zfill(3)[:3]
+                    + reten_s
+                    + (" " * 2)
+                    + "0,00"
+                    + fecha3
+                    + cuit13[:13]
+                    + (" " * 9)
+                    + ("0" * 14)
+                )
+                out_lines.append(line[:145].ljust(145))
 
     if not out_lines:
         raise SystemExit("No se encontraron retenciones de Ganancias (earnings) en el rango.")
@@ -272,7 +379,8 @@ def generar(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8", newline="") as f:
         for ln in out_lines:
-            f.write(ln + "\n")
+            # SIAP/SICORE suele asumir registros con terminador Windows (CRLF).
+            f.write(ln + "\r\n")
 
     return out_path
 

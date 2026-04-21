@@ -164,6 +164,31 @@ def _is_dgr_tax(tax: dict, prefer_iibb_only: bool) -> bool:
     return True
 
 
+def _alloc_by_weights(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
+    """
+    Prorratea `total` según `weights` (>=0), manteniendo 2 decimales y garantizando
+    que la suma final sea exactamente `total` (ajustando el último ítem).
+    """
+    if not weights:
+        return []
+    s = sum(weights)
+    if s <= Decimal("0"):
+        # si no hay pesos, todo al primero
+        out = [Decimal("0.00")] * len(weights)
+        out[0] = total.quantize(DEC2, rounding=ROUND_HALF_UP)
+        return out
+    out: list[Decimal] = []
+    acc = Decimal("0.00")
+    for i, w in enumerate(weights):
+        if i == len(weights) - 1:
+            v = (total - acc).quantize(DEC2, rounding=ROUND_HALF_UP)
+        else:
+            v = (total * w / s).quantize(DEC2, rounding=ROUND_HALF_UP)
+            acc += v
+        out.append(v)
+    return out
+
+
 def generar(
     desde: str,
     hasta: str,
@@ -173,6 +198,7 @@ def generar(
     codigo_extra: str,
     prefer_iibb_only: bool,
     usar_payment_name_normalizado: bool,
+    por_factura: bool,
 ) -> Path:
     cfg = ODOO_CONFIG_MASTER_DEV
     models, uid = odoo_connect(cfg)
@@ -203,7 +229,7 @@ def generar(
         "account.payment",
         "read",
         [pay_ids],
-        {"fields": ["id", "name", "date", "partner_id", "l10n_ar_withholding_ids"]},
+        {"fields": ["id", "name", "date", "partner_id", "l10n_ar_withholding_ids", "reconciled_bill_ids"]},
     )
 
     # Partners (para CUIT)
@@ -271,6 +297,21 @@ def generar(
         )
         taxes = {int(r["id"]): r for r in tr}
 
+    # Bills (facturas proveedor) reconciliadas contra los pagos del rango.
+    bill_ids = sorted({bid for p in pays for bid in (p.get("reconciled_bill_ids") or [])})
+    bills_by_id: dict[int, dict] = {}
+    if bill_ids:
+        br = models.execute_kw(
+            db,
+            uid,
+            pwd,
+            "account.move",
+            "read",
+            [bill_ids],
+            {"fields": ["id", "move_type", "amount_total", "ref", "name", "l10n_latam_document_number"]},
+        )
+        bills_by_id = {int(b["id"]): b for b in br}
+
     # Agrupar por payment, filtrando impuestos DGR/SIRCAR (IIBB)
     lines_by_payment: dict[int, list[dict]] = {}
     for l in lines:
@@ -302,10 +343,11 @@ def generar(
         else:
             orden_pago = str(pid).zfill(12)
 
-        for l in sorted(wlines, key=lambda r: int(r["id"])):
-            reg += 1
-            nro_registro = str(reg).zfill(5)
+        bill_list = [bills_by_id.get(int(bid), {}) for bid in (p.get("reconciled_bill_ids") or [])]
+        bill_list = [b for b in bill_list if b and (b.get("move_type") in ("in_invoice", "in_refund"))]
+        weights = [_abs_money(b.get("amount_total")) for b in bill_list]
 
+        for l in sorted(wlines, key=lambda r: int(r["id"])):
             base = _abs_money(l.get("tax_base_amount"))
             # Monto retenido: tomar crédito/debito/balance como absoluto
             importe = _abs_money(l.get("credit") or l.get("balance") or 0)  # suele venir en credit
@@ -316,21 +358,45 @@ def generar(
             tax = taxes.get(l["tax_line_id"][0]) if l.get("tax_line_id") else {}
             alicuota = _fmt_rate(tax.get("amount"))
 
-            filas.append(
-                RetRow(
-                    nro_registro=nro_registro,
-                    lote="1",
-                    sublote="1",
-                    orden_pago=orden_pago,
-                    cuit=cuit,
-                    fecha=fecha,
-                    base=_fmt_money_dot(base),
-                    alicuota=alicuota,
-                    importe=_fmt_money_dot(importe),
-                    codigo_regimen=codigo_regimen,
-                    codigo_extra=codigo_extra,
+            if por_factura and bill_list:
+                base_parts = _alloc_by_weights(base, weights)
+                imp_parts = _alloc_by_weights(importe, weights)
+                for bp, ip in zip(base_parts, imp_parts, strict=False):
+                    reg += 1
+                    nro_registro = str(reg).zfill(5)
+                    filas.append(
+                        RetRow(
+                            nro_registro=nro_registro,
+                            lote="1",
+                            sublote="1",
+                            orden_pago=orden_pago,
+                            cuit=cuit,
+                            fecha=fecha,
+                            base=_fmt_money_dot(bp),
+                            alicuota=alicuota,
+                            importe=_fmt_money_dot(ip),
+                            codigo_regimen=codigo_regimen,
+                            codigo_extra=codigo_extra,
+                        )
+                    )
+            else:
+                reg += 1
+                nro_registro = str(reg).zfill(5)
+                filas.append(
+                    RetRow(
+                        nro_registro=nro_registro,
+                        lote="1",
+                        sublote="1",
+                        orden_pago=orden_pago,
+                        cuit=cuit,
+                        fecha=fecha,
+                        base=_fmt_money_dot(base),
+                        alicuota=alicuota,
+                        importe=_fmt_money_dot(importe),
+                        codigo_regimen=codigo_regimen,
+                        codigo_extra=codigo_extra,
+                    )
                 )
-            )
 
     if not filas:
         raise SystemExit(
@@ -390,6 +456,18 @@ def main(argv: Iterable[str] | None = None) -> int:
         default=False,
         help="Usa payment.id zfill(12) como columna 4 (en vez de payment.name normalizado).",
     )
+    ap.add_argument(
+        "--por-factura",
+        action="store_true",
+        default=True,
+        help="Desagrega por factura reconciliada (prorratea base/importe). Default: activo.",
+    )
+    ap.add_argument(
+        "--por-pago",
+        action="store_true",
+        default=False,
+        help="Fuerza modo 1 línea por pago (sin desagregar facturas).",
+    )
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     out = generar(
@@ -400,6 +478,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         codigo_extra=str(args.codigo_extra).strip(),
         prefer_iibb_only=not args.incluir_no_iibb,
         usar_payment_name_normalizado=not bool(args.orden_por_payment_id),
+        por_factura=bool(args.por_factura) and (not bool(args.por_pago)),
     )
     print(f"OK: {out}")
     return 0
