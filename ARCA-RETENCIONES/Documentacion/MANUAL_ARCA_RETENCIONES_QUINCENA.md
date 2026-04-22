@@ -1,6 +1,6 @@
 ---
 title: ARCA Retenciones — manual de uso (quincena / rango)
-updated: 2026-04-20
+updated: 2026-04-21
 ---
 
 ## Para qué sirve
@@ -75,8 +75,30 @@ Están en subcarpetas `tools/` para no mezclarlas con el generador principal:
 |---------|---------|------------|
 | `SICORE/tools/` | `generar_op_odoo_master_dev.py`, `generar_ret_gan_mayor_odoo_master_dev.py`, `generar_rgan_cpa_master_dev.py` | Planillas / mayores / layout alternativo Ganancias |
 | `SIRCAR/tools/` | `generar_sircar_mayor_odoo_master_dev.py`, `generar_ret_iibb_mayor_odoo_master_dev.py`, `generar_ret_dgr_*.py` | CSV mayor, mayor IIBB, exports DGR |
+| `CERTIFICADOS-RETENCION-PDF/` | `generar_certificados_retencion_pdf_master_dev.py` | Generación masiva de **certificados PDF** (plantilla Excel → PDF) |
 
 Las salidas por defecto de esos scripts van a **`SICORE/out/`** o **`SIRCAR/out/`** (no a `tools/out/`).
+
+### Certificados de retención (PDF)
+
+Se generan desde la carpeta `CERTIFICADOS-RETENCION-PDF/` (en la **raíz del clon** `arca-retenciones/`).
+
+Ejemplo (quincena):
+
+```bash
+python3 CERTIFICADOS-RETENCION-PDF/generar_certificados_retencion_pdf_master_dev.py \
+  --desde 2026-04-01 --hasta 2026-04-15
+```
+
+Firma digital (opcional):
+
+- Por defecto toma `CERTIFICADOS-RETENCION-PDF/firma.png` y la inserta en la hoja `LOCAL` antes de exportar el PDF.
+- Si querés otra imagen, usá `--firma /ruta/a/otra_firma.png`.
+
+Debug:
+
+- `--keep-xlsx` deja el `.xlsx` intermedio al lado del PDF, útil si hay que ajustar posición/tamaño de la firma.
+  La firma se inserta manteniendo proporción (sin deformarse) y se ubica para que el PDF salga en 1 sola página.
 
 ## Parámetros avanzados
 
