@@ -23,6 +23,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--desde", required=True, help="YYYY-MM-DD (incl.)")
     ap.add_argument("--hasta", required=True, help="YYYY-MM-DD (incl.)")
     ap.add_argument(
+        "--layout",
+        choices=("estudio159", "estandar132"),
+        default="estudio159",
+        help="estudio159 = layout del estudio (histórico). estandar132 = SICORE v9 estándar (importador Configuración v9).",
+    )
+    ap.add_argument(
         "--codigo-operacion",
         default="1",
         help="Tabla C ARCA: 1 = Retención (recomendado).",
@@ -48,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         str(out),
         "--layout",
-        "estandar132",
+        str(args.layout),
         "--codigo-operacion",
         str(args.codigo_operacion),
         *passthrough,

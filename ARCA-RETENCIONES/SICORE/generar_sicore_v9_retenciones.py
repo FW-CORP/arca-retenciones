@@ -58,8 +58,9 @@ except Exception as e:  # pragma: no cover
 
 DEC2 = Decimal("0.01")
 
-# Longitud total registro (sin CRLF)
-LREG = 159
+# Longitudes totales (sin CRLF)
+LREG_ESTUDIO_159 = 159
+LREG_ESTANDAR_132 = 132
 
 # Orden y anchos para desglose / validación (debe coincidir con `_reg_sicore_line_160`)
 SICORE_V9_160_CAMPOS: tuple[tuple[str, int], ...] = (
@@ -85,8 +86,29 @@ SICORE_V9_160_CAMPOS: tuple[tuple[str, int], ...] = (
     ("relleno_final", 1),
 )
 
+SICORE_V9_132_CAMPOS: tuple[tuple[str, int], ...] = (
+    ("cod_comprobante", 2),
+    ("fecha_comprobante", 10),
+    ("nro_comprobante", 16),
+    ("importe_comprobante", 16),  # con coma decimal
+    ("cod_impuesto", 4),
+    ("cod_regimen", 4),
+    ("cod_operacion", 1),
+    ("base", 14),  # con coma decimal
+    ("fecha_retencion", 10),
+    ("cod_condicion", 2),
+    ("sujeto_suspendido", 1),
+    ("importe_retencion", 14),  # con coma decimal
+    ("porc_exclusion", 6),
+    ("fecha_boletin", 10),
+    ("tipo_doc", 2),
+    ("nro_doc", 20),
+)
 
-def validar_posiciones_clave_sicore(path: Path) -> tuple[int, list[tuple[int, list[str]]]]:
+
+def validar_posiciones_clave_sicore(
+    path: Path, *, layout: str = "estudio159"
+) -> tuple[int, list[tuple[int, list[str]]]]:
     """
     Comprueba en cada línea (columnas 1-based, criterio Bloc de notas):
     - Col 67: inicio fecha retención (dd/mm/aaaa)
@@ -94,7 +116,12 @@ def validar_posiciones_clave_sicore(path: Path) -> tuple[int, list[tuple[int, li
     - Col 109: primer dígito CUIT
     """
     raw = path.read_text(encoding="ascii", errors="replace")
-    col_fecha, col_tipo, col_cuit = 67, 107, 109
+    if layout == "estandar132":
+        lreg = LREG_ESTANDAR_132
+        col_fecha, col_tipo, col_cuit = 68, 111, 113
+    else:
+        lreg = LREG_ESTUDIO_159
+        col_fecha, col_tipo, col_cuit = 67, 107, 109
     i_f, i_t, i_c = col_fecha - 1, col_tipo - 1, col_cuit - 1
     failures: list[tuple[int, list[str]]] = []
     n_ok = 0
@@ -103,8 +130,8 @@ def validar_posiciones_clave_sicore(path: Path) -> tuple[int, list[tuple[int, li
         if not s:
             continue
         errs: list[str] = []
-        if len(s) != LREG:
-            errs.append(f"largo {len(s)} != {LREG}")
+        if len(s) != lreg:
+            errs.append(f"largo {len(s)} != {lreg}")
         if len(s) > i_f + 9:
             chunk = s[i_f : i_f + 10]
             if not (len(chunk) == 10 and chunk[2] == "/" and chunk[5] == "/"):
@@ -131,11 +158,24 @@ def validar_posiciones_clave_sicore(path: Path) -> tuple[int, list[tuple[int, li
 def desglosar_registro_sicore_160(line: str) -> list[tuple[str, str]]:
     """Parte una línea (sin CRLF) en campos según `SICORE_V9_160_CAMPOS` (LREG posiciones)."""
     s = line.rstrip("\r\n")
-    if len(s) != LREG:
-        raise ValueError(f"Largo {len(s)} != {LREG}")
+    if len(s) != LREG_ESTUDIO_159:
+        raise ValueError(f"Largo {len(s)} != {LREG_ESTUDIO_159}")
     out: list[tuple[str, str]] = []
     i = 0
     for name, w in SICORE_V9_160_CAMPOS:
+        out.append((name, s[i : i + w]))
+        i += w
+    return out
+
+
+def desglosar_registro_sicore_132(line: str) -> list[tuple[str, str]]:
+    """Parte una línea (sin CRLF) en campos según `SICORE_V9_132_CAMPOS` (132 posiciones)."""
+    s = line.rstrip("\r\n")
+    if len(s) != LREG_ESTANDAR_132:
+        raise ValueError(f"Largo {len(s)} != {LREG_ESTANDAR_132}")
+    out: list[tuple[str, str]] = []
+    i = 0
+    for name, w in SICORE_V9_132_CAMPOS:
         out.append((name, s[i : i + w]))
         i += w
     return out
@@ -253,6 +293,28 @@ def _fmt_cuit_11(cuit11: str) -> str:
     return d[:11]
 
 
+def _fmt_con_coma_decimal(value: Any, width: int) -> str:
+    """
+    Campo numérico con coma decimal (2 decimales), sin signo.
+    Ej width=16 => 13 enteros + ',' + 2 decimales.
+    Ej width=14 => 11 enteros + ',' + 2 decimales.
+    """
+    d = _d(value)
+    d = abs(d).quantize(DEC2, rounding=ROUND_HALF_UP)
+    entero = int(d)
+    dec = int((d - Decimal(entero)) * 100)
+    int_width = width - 3
+    if int_width < 1:
+        raise ValueError(f"width inválido: {width}")
+    return f"{entero:0{int_width}d},{dec:02d}"[-width:]
+
+
+def _fmt_doc_20_cuit(cuit11: str) -> str:
+    """Documento retenido: 20 AN (CUIT 11 + padding espacios a derecha)."""
+    c = _fmt_cuit_11(cuit11)
+    return (c + (" " * 20))[:20]
+
+
 def _reg_sicore_line_160(
     *,
     cod_comprobante_2: str,
@@ -302,8 +364,50 @@ def _reg_sicore_line_160(
         + relleno_final_1
     )
     out = core + tail
-    if len(out) != LREG:
-        raise ValueError(f"Largo registro {len(out)} != {LREG}")
+    if len(out) != LREG_ESTUDIO_159:
+        raise ValueError(f"Largo registro {len(out)} != {LREG_ESTUDIO_159}")
+    return out
+
+
+def _reg_sicore_line_132(
+    *,
+    cod_comprobante_2: str,
+    fecha_comprobante_10: str,
+    nro_comprobante_16: str,
+    importe_comprobante_16: str,
+    cod_impuesto_4: str,
+    cod_regimen_4: str,
+    cod_operacion_1: str,
+    base_14: str,
+    fecha_retencion_10: str,
+    cod_condicion_2: str,
+    sujeto_suspendido_1: str,
+    importe_retencion_14: str,
+    porc_exclusion_6: str,
+    fecha_boletin_10: str,
+    tipo_doc_2: str,
+    nro_doc_20: str,
+) -> str:
+    out = (
+        cod_comprobante_2
+        + fecha_comprobante_10
+        + nro_comprobante_16
+        + importe_comprobante_16
+        + cod_impuesto_4
+        + cod_regimen_4
+        + cod_operacion_1
+        + base_14
+        + fecha_retencion_10
+        + cod_condicion_2
+        + sujeto_suspendido_1
+        + importe_retencion_14
+        + porc_exclusion_6
+        + fecha_boletin_10
+        + tipo_doc_2
+        + nro_doc_20
+    )
+    if len(out) != LREG_ESTANDAR_132:
+        raise ValueError(f"Largo registro {len(out)} != {LREG_ESTANDAR_132}")
     return out
 
 
@@ -312,6 +416,7 @@ def generar(
     hasta: str,
     *,
     out_path: Path,
+    layout: str = "estandar132",
     modo_comprobante: str = "auto",
     fecha_comprobante: str = "auto",
     codigo_comprobante_manual: str | None = None,
@@ -498,7 +603,10 @@ def generar(
             fecha_comp = fecha_ret
             raw_nro = str(p.get("name") or "")
             nro_comp_16 = _nro_comprobante_16_fiscal(raw_nro)
-            imp_comp = _fmt_centavos_sin_separador(_abs_money(p.get("amount")), 16)
+            if layout == "estandar132":
+                imp_comp = _fmt_con_coma_decimal(_abs_money(p.get("amount")), 16)
+            else:
+                imp_comp = _fmt_centavos_sin_separador(_abs_money(p.get("amount")), 16)
         elif use_bill:
             bill = bills_ord[0]
             cod_comp2 = "01"
@@ -509,13 +617,19 @@ def generar(
                 or str(bill.get("name") or "").strip()
             )
             nro_comp_16 = _nro_comprobante_16_fiscal(raw_nro)
-            imp_comp = _fmt_centavos_sin_separador(_abs_money(bill.get("amount_total")), 16)
+            if layout == "estandar132":
+                imp_comp = _fmt_con_coma_decimal(_abs_money(bill.get("amount_total")), 16)
+            else:
+                imp_comp = _fmt_centavos_sin_separador(_abs_money(bill.get("amount_total")), 16)
         else:
             cod_comp2 = str(codigo_comprobante_sin_factura).zfill(2)[:2]
             fecha_comp = fecha_ret
             raw_nro = str(p.get("name") or "")
             nro_comp_16 = _nro_comprobante_16_fiscal(raw_nro)
-            imp_comp = _fmt_centavos_sin_separador(_abs_money(p.get("amount")), 16)
+            if layout == "estandar132":
+                imp_comp = _fmt_con_coma_decimal(_abs_money(p.get("amount")), 16)
+            else:
+                imp_comp = _fmt_centavos_sin_separador(_abs_money(p.get("amount")), 16)
 
         # Override de fecha de comprobante según configuración
         if fecha_comprobante == "pago":
@@ -529,38 +643,62 @@ def generar(
                 fecha_comp = fecha_ret
 
         for l in sorted(wlines, key=lambda r: int(r["id"])):
-            base = _fmt_centavos_sin_separador(_abs_money(l.get("tax_base_amount")), 14)
-            imp_ret = _fmt_centavos_sin_separador(
-                _abs_money(l.get("credit") or l.get("balance") or 0), 14
-            )
-            if imp_ret == "0" * 14:
-                imp_ret = _fmt_centavos_sin_separador(_abs_money(l.get("balance")), 14)
+            if layout == "estandar132":
+                base = _fmt_con_coma_decimal(_abs_money(l.get("tax_base_amount")), 14)
+                imp_ret = _fmt_con_coma_decimal(_abs_money(l.get("credit") or l.get("balance") or 0), 14)
+            else:
+                base = _fmt_centavos_sin_separador(_abs_money(l.get("tax_base_amount")), 14)
+                imp_ret = _fmt_centavos_sin_separador(
+                    _abs_money(l.get("credit") or l.get("balance") or 0), 14
+                )
+                if imp_ret == "0" * 14:
+                    imp_ret = _fmt_centavos_sin_separador(_abs_money(l.get("balance")), 14)
 
             tax = taxes.get(int(l["tax_line_id"][0])) if l.get("tax_line_id") else {}
             cod_reg_3 = _cod_regimen_3_desde_tax_code(str(tax.get("l10n_ar_code") or ""))
 
-            line = _reg_sicore_line_160(
-                cod_comprobante_2=cod_comp2,
-                fecha_comprobante_10=fecha_comp,
-                nro_comprobante_16=nro_comp_16,
-                importe_comprobante_16=imp_comp,
-                cod_impuesto_4=str(codigo_impuesto_ganancias).zfill(4)[:4],
-                cod_regimen_3=cod_reg_3,
-                cod_operacion_1=str(codigo_operacion)[:1],
-                base_14=base,
-                fecha_retencion_10=fecha_ret,
-                cod_condicion_2=str(codigo_condicion).zfill(2)[:2],
-                importe_retencion_14=imp_ret,
-                excedente_otros_14="0" * 14,
-                tipo_doc_2=str(tipo_doc).zfill(2)[:2],
-                nro_cuit_11=nro_cuit_11,
-                porc_exclusion_11="0" * 11,
-                fecha_pub_certificado_10=fecha_pub_def,
-                tipo_regimen_especial_2=tipo_reg_esp_def,
-                importe_base_exclusion_14=base_excl_def,
-                tipo_cuenta_2=tipo_cta_def,
-                relleno_final_1=relleno_final_def,
-            )
+            if layout == "estandar132":
+                line = _reg_sicore_line_132(
+                    cod_comprobante_2=cod_comp2,
+                    fecha_comprobante_10=fecha_comp,
+                    nro_comprobante_16=nro_comp_16,
+                    importe_comprobante_16=imp_comp,
+                    cod_impuesto_4=str(codigo_impuesto_ganancias).zfill(4)[:4],
+                    cod_regimen_4=("0" + cod_reg_3).zfill(4)[-4:],
+                    cod_operacion_1=str(codigo_operacion)[:1],
+                    base_14=base,
+                    fecha_retencion_10=fecha_ret,
+                    cod_condicion_2=str(codigo_condicion).zfill(2)[:2],
+                    sujeto_suspendido_1="0",
+                    importe_retencion_14=imp_ret,
+                    porc_exclusion_6="000000",
+                    fecha_boletin_10=" " * 10,
+                    tipo_doc_2=str(tipo_doc).zfill(2)[:2],
+                    nro_doc_20=_fmt_doc_20_cuit(nro_cuit_11),
+                )
+            else:
+                line = _reg_sicore_line_160(
+                    cod_comprobante_2=cod_comp2,
+                    fecha_comprobante_10=fecha_comp,
+                    nro_comprobante_16=nro_comp_16,
+                    importe_comprobante_16=imp_comp,
+                    cod_impuesto_4=str(codigo_impuesto_ganancias).zfill(4)[:4],
+                    cod_regimen_3=cod_reg_3,
+                    cod_operacion_1=str(codigo_operacion)[:1],
+                    base_14=base,
+                    fecha_retencion_10=fecha_ret,
+                    cod_condicion_2=str(codigo_condicion).zfill(2)[:2],
+                    importe_retencion_14=imp_ret,
+                    excedente_otros_14="0" * 14,
+                    tipo_doc_2=str(tipo_doc).zfill(2)[:2],
+                    nro_cuit_11=nro_cuit_11,
+                    porc_exclusion_11="0" * 11,
+                    fecha_pub_certificado_10=fecha_pub_def,
+                    tipo_regimen_especial_2=tipo_reg_esp_def,
+                    importe_base_exclusion_14=base_excl_def,
+                    tipo_cuenta_2=tipo_cta_def,
+                    relleno_final_1=relleno_final_def,
+                )
             out_lines.append(line)
 
     if not out_lines:
@@ -609,6 +747,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         default=Path(__file__).resolve().parent / "out" / "SICORE_V9_RETENCIONES_GANANCIAS.TXT",
     )
     ap.add_argument(
+        "--layout",
+        choices=("estandar132", "estudio159"),
+        default="estandar132",
+        help="estandar132 = SICORE v9 estándar (132 pos). estudio159 = layout del estudio (159 pos).",
+    )
+    ap.add_argument(
         "--modo-comprobante",
         choices=("auto", "factura", "orden_pago"),
         default="auto",
@@ -650,7 +794,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         path = args.validar_posiciones.expanduser()
         if not path.is_file():
             raise SystemExit(f"No existe el archivo: {path}")
-        n_ok, failures = validar_posiciones_clave_sicore(path)
+        raw = path.read_text(encoding="ascii", errors="replace")
+        first = raw.splitlines()[0] if raw else ""
+        lay = "estandar132" if len(first.rstrip("\r\n")) == LREG_ESTANDAR_132 else "estudio159"
+        n_ok, failures = validar_posiciones_clave_sicore(path, layout=lay)
         if failures:
             print(f"FALLO: {len(failures)} línea(s), {n_ok} OK")
             for lineno, errs in failures[:20]:
@@ -658,7 +805,10 @@ def main(argv: Iterable[str] | None = None) -> int:
             if len(failures) > 20:
                 print(f"  ... y {len(failures) - 20} más")
             return 1
-        print(f"OK: {n_ok} línea(s) — col 67 fecha retención, col 107 '80', col 109 CUIT.")
+        if lay == "estandar132":
+            print(f"OK: {n_ok} línea(s) — layout 132 (col 68 fecha ret., col 111 '80', col 113 doc).")
+        else:
+            print(f"OK: {n_ok} línea(s) — layout 159 (col 67 fecha ret., col 107 '80', col 109 CUIT).")
         return 0
 
     if args.desglosar:
@@ -668,7 +818,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         raw = path.read_text(encoding="ascii", errors="replace")
         first = raw.splitlines()[0] if raw else ""
         try:
-            campos = desglosar_registro_sicore_160(first)
+            if len(first.rstrip("\r\n")) == LREG_ESTANDAR_132:
+                campos = desglosar_registro_sicore_132(first)
+            else:
+                campos = desglosar_registro_sicore_160(first)
         except ValueError as e:
             raise SystemExit(f"Primera línea inválida: {e}\n{first!r}") from e
         pos = 1
@@ -682,6 +835,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         args.desde,
         args.hasta,
         out_path=args.out,
+        layout=args.layout,
         modo_comprobante=args.modo_comprobante,
         fecha_comprobante=args.fecha_comprobante,
         codigo_comprobante_manual=args.codigo_comprobante,

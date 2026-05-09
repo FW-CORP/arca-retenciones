@@ -389,159 +389,19 @@ def _add_signature_image_to_local_sheet(
     Inserta una imagen PNG (firma) en la hoja LOCAL usando OOXML drawings.
     Se hace después de strippear dibujos guía para no reintroducirlos.
     """
-    if not signature_png.exists():
-        return xlsx_path
-    if height_emu is None:
-        try:
-            w, h = _png_wh(signature_png)
-            # Mantener proporción (evita "deforme")
-            height_emu = max(1, int(width_emu * h / max(1, w)))
-        except Exception:
-            height_emu = 600_000
-
-    # convertir A1 ref a (col,row) 0-based
-    m = re.match(r"^([A-Z]+)(\d+)$", anchor_cell.upper().strip())
-    if not m:
-        raise ValueError(f"Celda inválida para ancla: {anchor_cell}")
-    col_letters, row_num_s = m.group(1), m.group(2)
-    col = 0
-    for ch in col_letters:
-        col = col * 26 + (ord(ch) - ord("A") + 1)
-    col -= 1
-    row = int(row_num_s) - 1
-
-    sheet_path = "xl/worksheets/sheet2.xml"
-    rels_path = "xl/worksheets/_rels/sheet2.xml.rels"
-    pkg_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
-    rel_ns = {"pr": pkg_rel_ns}
-    ws_ns_r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-
-    drawing_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
-          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-  <xdr:oneCellAnchor>
-    <xdr:from>
-      <xdr:col>{col}</xdr:col>
-      <xdr:colOff>0</xdr:colOff>
-      <xdr:row>{row}</xdr:row>
-      <xdr:rowOff>0</xdr:rowOff>
-    </xdr:from>
-    <xdr:ext cx="{cx}" cy="{cy}"/>
-    <xdr:pic>
-      <xdr:nvPicPr>
-        <xdr:cNvPr id="1" name="firma.png"/>
-        <xdr:cNvPicPr/>
-      </xdr:nvPicPr>
-      <xdr:blipFill>
-        <a:blip xmlns:r="{rns}" r:embed="rId1"/>
-        <a:stretch><a:fillRect/></a:stretch>
-      </xdr:blipFill>
-      <xdr:spPr>
-        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-      </xdr:spPr>
-    </xdr:pic>
-    <xdr:clientData/>
-  </xdr:oneCellAnchor>
-</xdr:wsDr>
-""".format(col=col, row=row, cx=width_emu, cy=height_emu, rns=ws_ns_r)
-
-    drawing_rels_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1"
-    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
-    Target="../media/firma.png"/>
-</Relationships>
-"""
-
-    with zipfile.ZipFile(xlsx_path, "r") as z:
-        names = set(z.namelist())
-        if sheet_path not in names:
-            return xlsx_path
-
-        # determinar próximo drawingN.xml disponible
-        drawing_nums = []
-        for n in names:
-            m = re.match(r"xl/drawings/drawing(\d+)\.xml$", n)
-            if m:
-                drawing_nums.append(int(m.group(1)))
-        next_n = (max(drawing_nums) + 1) if drawing_nums else 1
-        drawing_path = f"xl/drawings/drawing{next_n}.xml"
-        drawing_rels_path = f"xl/drawings/_rels/drawing{next_n}.xml.rels"
-
-        # cargar y modificar sheet2.xml para apuntar al drawing
-        ws = ET.fromstring(z.read(sheet_path))
-        # agregar <drawing r:id="rIdSig"/> como hijo directo si no existe
-        has_drawing = any(child.tag.endswith("drawing") for child in list(ws))
-        if not has_drawing:
-            dr = ET.Element("{%s}drawing" % NS["m"])
-            dr.set("{%s}id" % ws_ns_r, "rIdSig")
-            ws.append(dr)
-
-        # actualizar/crear rels de sheet2 para agregar relationship a drawing
-        rels_bytes = None
-        if rels_path in names:
-            rels = ET.fromstring(z.read(rels_path))
-        else:
-            rels = ET.Element("{%s}Relationships" % pkg_rel_ns)
-        # evitar duplicado
-        exists = False
-        for rel in rels.findall("pr:Relationship", rel_ns):
-            if rel.attrib.get("Id") == "rIdSig":
-                exists = True
-                rel.attrib["Target"] = f"../drawings/drawing{next_n}.xml"
-        if not exists:
-            rel = ET.SubElement(rels, "{%s}Relationship" % pkg_rel_ns)
-            rel.attrib["Id"] = "rIdSig"
-            rel.attrib["Type"] = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"
-            rel.attrib["Target"] = f"../drawings/drawing{next_n}.xml"
-        rels_bytes = ET.tostring(rels, encoding="utf-8", xml_declaration=True)
-
-        # asegurar content-types para drawings
-        ct_path = "[Content_Types].xml"
-        ct_bytes: bytes | None = None
-        if ct_path in names:
-            ct = ET.fromstring(z.read(ct_path))
-            ct_ns = "http://schemas.openxmlformats.org/package/2006/content-types"
-            # root suele venir ya namespaced; buscamos Override existente
-            drawing_part = f"/xl/drawings/drawing{next_n}.xml"
-            has_override = False
-            for ov in ct.findall(".//{*}Override"):
-                if ov.attrib.get("PartName") == drawing_part:
-                    has_override = True
-                    break
-            if not has_override:
-                ET.SubElement(
-                    ct,
-                    "{%s}Override" % ct_ns,
-                    {
-                        "PartName": drawing_part,
-                        "ContentType": "application/vnd.openxmlformats-officedocument.drawing+xml",
-                    },
-                )
-            ct_bytes = ET.tostring(ct, encoding="utf-8", xml_declaration=True)
-
-        # escribir zip nuevo
-        with tempfile.NamedTemporaryFile(prefix="sig_", suffix=".xlsx", delete=False) as tf:
-            tmp_out = Path(tf.name)
-
-        firma_bytes = signature_png.read_bytes()
-        with zipfile.ZipFile(tmp_out, "w") as outz:
-            for n in z.namelist():
-                if n == sheet_path:
-                    outz.writestr(n, ET.tostring(ws, encoding="utf-8", xml_declaration=True))
-                elif n == rels_path:
-                    outz.writestr(n, rels_bytes)
-                elif n == ct_path and ct_bytes is not None:
-                    outz.writestr(n, ct_bytes)
-                else:
-                    outz.writestr(n, z.read(n))
-            # agregar drawing + rels + imagen
-            outz.writestr(drawing_path, drawing_xml)
-            outz.writestr(drawing_rels_path, drawing_rels_xml)
-            outz.writestr("xl/media/firma.png", firma_bytes)
-
-    tmp_out.replace(xlsx_path)
-    return xlsx_path
+    return _add_images_to_local_sheet(
+        xlsx_path,
+        images=[
+            {
+                "png": signature_png,
+                "media_name": "firma.png",
+                "anchor_cell": anchor_cell,
+                "width_emu": width_emu,
+                "height_emu": height_emu,
+            }
+        ],
+        drawing_rel_id="rIdSig",
+    )
 
 
 def _xlsx_to_pdf(xlsx_path: Path, out_pdf: Path) -> Path:
@@ -625,6 +485,232 @@ def _png_wh(path: Path) -> tuple[int, int]:
     return w, h
 
 
+def _a1_to_col_row(a1: str) -> tuple[int, int]:
+    m = re.match(r"^([A-Z]+)(\d+)$", (a1 or "").upper().strip())
+    if not m:
+        raise ValueError(f"Celda inválida para ancla: {a1}")
+    col_letters, row_num_s = m.group(1), m.group(2)
+    col = 0
+    for ch in col_letters:
+        col = col * 26 + (ord(ch) - ord("A") + 1)
+    col -= 1
+    row = int(row_num_s) - 1
+    return col, row
+
+
+def _add_images_to_local_sheet(
+    xlsx_path: Path,
+    *,
+    images: list[dict[str, Any]],
+    drawing_rel_id: str = "rIdSig",
+) -> Path:
+    """
+    Inserta 1 o más imágenes en la hoja LOCAL (sheet2) usando un único drawing.
+
+    images: [{png: Path, media_name: "logo.png", anchor_cell: "A2", width_emu: int, height_emu: Optional[int]}]
+    """
+    images = [im for im in images if im.get("png") and Path(im["png"]).exists()]
+    if not images:
+        return xlsx_path
+
+    sheet_path = "xl/worksheets/sheet2.xml"
+    rels_path = "xl/worksheets/_rels/sheet2.xml.rels"
+    pkg_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+    rel_ns = {"pr": pkg_rel_ns}
+    ws_ns_r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+    xdr_ns = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+    a_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+    def normalize_target_to_zip_path(tgt: str) -> str:
+        t = (tgt or "").lstrip("/")
+        if t.startswith("../"):
+            t = t[3:]
+        if not t.startswith("xl/"):
+            t = "xl/" + t
+        return t
+
+    with zipfile.ZipFile(xlsx_path, "r") as z:
+        names = set(z.namelist())
+        if sheet_path not in names:
+            return xlsx_path
+
+        ws = ET.fromstring(z.read(sheet_path))
+
+        # rels de sheet2
+        if rels_path in names:
+            sheet_rels = ET.fromstring(z.read(rels_path))
+        else:
+            sheet_rels = ET.Element("{%s}Relationships" % pkg_rel_ns)
+
+        # encontrar/crear relationship de drawing en sheet2 rels
+        drawing_target = None
+        for rel in sheet_rels.findall("pr:Relationship", rel_ns):
+            if rel.attrib.get("Id") == drawing_rel_id and "drawing" in (rel.attrib.get("Type") or ""):
+                drawing_target = rel.attrib.get("Target")
+                break
+
+        if not drawing_target:
+            drawing_nums = []
+            for n in names:
+                m = re.match(r"xl/drawings/drawing(\d+)\.xml$", n)
+                if m:
+                    drawing_nums.append(int(m.group(1)))
+            next_n = (max(drawing_nums) + 1) if drawing_nums else 1
+            drawing_target = f"../drawings/drawing{next_n}.xml"
+            rel = ET.SubElement(sheet_rels, "{%s}Relationship" % pkg_rel_ns)
+            rel.attrib["Id"] = drawing_rel_id
+            rel.attrib["Type"] = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"
+            rel.attrib["Target"] = drawing_target
+
+        drawing_path = normalize_target_to_zip_path(drawing_target)
+        m = re.match(r"^xl/drawings/(drawing\d+)\.xml$", drawing_path)
+        if not m:
+            raise SystemExit(f"Target de drawing inesperado: {drawing_path}")
+        drawing_rels_path = f"xl/drawings/_rels/{m.group(1)}.xml.rels"
+
+        # asegurar elemento <drawing r:id="..."> en worksheet
+        has_el = False
+        for child in list(ws):
+            if child.tag.endswith("drawing") and child.attrib.get("{%s}id" % ws_ns_r) == drawing_rel_id:
+                has_el = True
+                break
+        if not has_el:
+            dr_el = ET.Element("{%s}drawing" % NS["m"])
+            dr_el.set("{%s}id" % ws_ns_r, drawing_rel_id)
+            ws.append(dr_el)
+
+        # cargar/crear drawing xml
+        if drawing_path in names:
+            dr = ET.fromstring(z.read(drawing_path))
+        else:
+            dr = ET.fromstring(
+                b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" />"""
+            )
+
+        # cargar/crear rels del drawing
+        if drawing_rels_path in names:
+            dr_rels = ET.fromstring(z.read(drawing_rels_path))
+        else:
+            dr_rels = ET.Element("{%s}Relationships" % pkg_rel_ns)
+
+        # próximo rId numérico
+        used_nums: set[int] = set()
+        for rel in dr_rels.findall("pr:Relationship", rel_ns):
+            rid = rel.attrib.get("Id") or ""
+            mm = re.match(r"rId(\d+)$", rid)
+            if mm:
+                used_nums.add(int(mm.group(1)))
+        next_rid_num = (max(used_nums) + 1) if used_nums else 1
+
+        media_writes: dict[str, bytes] = {}
+
+        for idx, im in enumerate(images, start=1):
+            png_path = Path(im["png"])
+            media_name = str(im.get("media_name") or f"img_{idx}.png")
+            anchor_cell = str(im.get("anchor_cell") or "A1")
+            width_emu = int(im.get("width_emu") or 1_000_000)
+            height_emu = im.get("height_emu")
+            if height_emu is None:
+                try:
+                    w, h = _png_wh(png_path)
+                    height_emu = max(1, int(width_emu * h / max(1, w)))
+                except Exception:
+                    height_emu = 600_000
+            height_emu = int(height_emu)
+
+            col, row = _a1_to_col_row(anchor_cell)
+            rid = f"rId{next_rid_num}"
+            next_rid_num += 1
+
+            rel = ET.SubElement(dr_rels, "{%s}Relationship" % pkg_rel_ns)
+            rel.attrib["Id"] = rid
+            rel.attrib["Type"] = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+            rel.attrib["Target"] = f"../media/{media_name}"
+
+            one = ET.SubElement(dr, "{%s}oneCellAnchor" % xdr_ns)
+            frm = ET.SubElement(one, "{%s}from" % xdr_ns)
+            ET.SubElement(frm, "{%s}col" % xdr_ns).text = str(col)
+            ET.SubElement(frm, "{%s}colOff" % xdr_ns).text = "0"
+            ET.SubElement(frm, "{%s}row" % xdr_ns).text = str(row)
+            ET.SubElement(frm, "{%s}rowOff" % xdr_ns).text = "0"
+            ext = ET.SubElement(one, "{%s}ext" % xdr_ns)
+            ext.attrib["cx"] = str(width_emu)
+            ext.attrib["cy"] = str(height_emu)
+
+            pic = ET.SubElement(one, "{%s}pic" % xdr_ns)
+            nv = ET.SubElement(pic, "{%s}nvPicPr" % xdr_ns)
+            cNvPr = ET.SubElement(nv, "{%s}cNvPr" % xdr_ns)
+            cNvPr.attrib["id"] = str(2000 + idx)
+            cNvPr.attrib["name"] = media_name
+            ET.SubElement(nv, "{%s}cNvPicPr" % xdr_ns)
+            blipFill = ET.SubElement(pic, "{%s}blipFill" % xdr_ns)
+            blip = ET.SubElement(blipFill, "{%s}blip" % a_ns)
+            blip.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"] = rid
+            stretch = ET.SubElement(blipFill, "{%s}stretch" % a_ns)
+            ET.SubElement(stretch, "{%s}fillRect" % a_ns)
+            spPr = ET.SubElement(pic, "{%s}spPr" % xdr_ns)
+            prst = ET.SubElement(spPr, "{%s}prstGeom" % a_ns)
+            prst.attrib["prst"] = "rect"
+            ET.SubElement(prst, "{%s}avLst" % a_ns)
+            ET.SubElement(one, "{%s}clientData" % xdr_ns)
+
+            media_writes[f"xl/media/{media_name}"] = png_path.read_bytes()
+
+        # asegurar content-types para drawing
+        ct_path = "[Content_Types].xml"
+        ct_bytes: bytes | None = None
+        if ct_path in names:
+            ct = ET.fromstring(z.read(ct_path))
+            ct_ns = "http://schemas.openxmlformats.org/package/2006/content-types"
+            drawing_part = "/" + drawing_path
+            has_override = False
+            for ov in ct.findall(".//{*}Override"):
+                if ov.attrib.get("PartName") == drawing_part:
+                    has_override = True
+                    break
+            if not has_override:
+                ET.SubElement(
+                    ct,
+                    "{%s}Override" % ct_ns,
+                    {
+                        "PartName": drawing_part,
+                        "ContentType": "application/vnd.openxmlformats-officedocument.drawing+xml",
+                    },
+                )
+            ct_bytes = ET.tostring(ct, encoding="utf-8", xml_declaration=True)
+
+        with tempfile.NamedTemporaryFile(prefix="img_", suffix=".xlsx", delete=False) as tf:
+            tmp_out = Path(tf.name)
+
+        with zipfile.ZipFile(tmp_out, "w") as outz:
+            for n in z.namelist():
+                if n == sheet_path:
+                    outz.writestr(n, ET.tostring(ws, encoding="utf-8", xml_declaration=True))
+                elif n == rels_path:
+                    outz.writestr(n, ET.tostring(sheet_rels, encoding="utf-8", xml_declaration=True))
+                elif n == drawing_path:
+                    outz.writestr(n, ET.tostring(dr, encoding="utf-8", xml_declaration=True))
+                elif n == drawing_rels_path:
+                    outz.writestr(n, ET.tostring(dr_rels, encoding="utf-8", xml_declaration=True))
+                elif n == ct_path and ct_bytes is not None:
+                    outz.writestr(n, ct_bytes)
+                else:
+                    outz.writestr(n, z.read(n))
+
+            if drawing_path not in names:
+                outz.writestr(drawing_path, ET.tostring(dr, encoding="utf-8", xml_declaration=True))
+            if drawing_rels_path not in names:
+                outz.writestr(drawing_rels_path, ET.tostring(dr_rels, encoding="utf-8", xml_declaration=True))
+            for p, b in media_writes.items():
+                outz.writestr(p, b)
+
+    tmp_out.replace(xlsx_path)
+    return xlsx_path
+
+
 def _safe_filename_component(s: str, *, max_len: int = 80) -> str:
     s = (s or "").strip()
     if not s:
@@ -639,6 +725,29 @@ def _safe_filename_component(s: str, *, max_len: int = 80) -> str:
     return s[:max_len]
 
 
+def _retencion_tipo_desde_impuesto(tax_name: str) -> str:
+    t = (tax_name or "").upper()
+    if any(x in t for x in ("GANAN", "RG 830", "830", "SICORE")):
+        return "GANANCIAS"
+    if any(x in t for x in ("IIBB", "SIRCAR", "INGRESOS BRUTOS")):
+        return "IIBB"
+    return "RETENCION"
+
+
+_NO_IMPONIBLE_BIENES = Decimal("224000")
+_NO_IMPONIBLE_SERVICIOS = Decimal("120000")
+
+
+def _no_imponible_param_por_concepto(tax_name: str) -> Decimal:
+    """
+    Heurística simple (ajustable) basada en el nombre del impuesto/régimen.
+    """
+    t = (tax_name or "").upper()
+    if "BIENES" in t:
+        return _NO_IMPONIBLE_BIENES
+    return _NO_IMPONIBLE_SERVICIOS
+
+
 def _last5_from_cert(cert_nro: str) -> str:
     d = _digits_only(cert_nro)
     return d[-5:] if len(d) >= 5 else d.rjust(5, "0")
@@ -648,6 +757,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--desde", required=True, help="YYYY-MM-DD")
     ap.add_argument("--hasta", required=True, help="YYYY-MM-DD")
+    ap.add_argument(
+        "--cert",
+        action="append",
+        default=[],
+        help="Genera solo estos CERT-* (puede repetirse). Ej: --cert CERT-2026-086031",
+    )
     ap.add_argument(
         "--plantilla",
         type=Path,
@@ -660,6 +775,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         type=Path,
         default=Path(__file__).resolve().parent / "firma.png",
         help="PNG de firma a insertar (opcional).",
+    )
+    ap.add_argument(
+        "--logo",
+        type=Path,
+        default=Path(__file__).resolve().parent / "logo.png",
+        help="PNG de logo a insertar (opcional).",
     )
     ap.add_argument(
         "--keep-xlsx",
@@ -690,6 +811,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         ("tax_line_id", "!=", False),
         ("parent_state", "=", "posted"),
     ]
+    if args.cert:
+        dom.append(("name", "in", list(args.cert)))
     line_ids: list[int] = models.execute_kw(
         db, uid, pwd, "account.move.line", "search", [dom], {"order": "date asc, id asc"}
     )
@@ -786,6 +909,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         tmp = Path(td)
         template_xlsx = _convert_xlsm_to_xlsx(Path(args.plantilla), tmp)
 
+        # memo: (partner_id, tax_id, yyyy-mm) -> True si ya hubo retención previa en el mes
+        prev_mes_cache: dict[tuple[int, int, str], bool] = {}
+
         for l in lines:
             cert_nro = str(l.get("name") or "").strip()
             emision = datetime.strptime(str(l.get("date")), "%Y-%m-%d").date()
@@ -812,7 +938,39 @@ def main(argv: Iterable[str] | None = None) -> int:
             nro_comp = _best_comprobante_from_memo_or_bills(memo, bill_list) or _parse_invoice_from_move_name(str(move.get("name") or "")) or str(move.get("ref") or "")
             letras = _num_to_words_es_pesos(importe)
 
+            tax_name = str(tax.get("name") or "")
+            tipo = _retencion_tipo_desde_impuesto(tax_name)
+
+            # Monto NO imponible: solo si es la primera del mes (por proveedor + impuesto).
+            no_imponible = Decimal("0")
+            try:
+                pid = int(l["partner_id"][0]) if l.get("partner_id") else 0
+                tid = int(l["tax_line_id"][0]) if l.get("tax_line_id") else 0
+                ym = f"{emision.year:04d}-{emision.month:02d}"
+                key = (pid, tid, ym)
+                had_prev = prev_mes_cache.get(key)
+                if had_prev is None and pid and tid:
+                    desde_mes = emision.replace(day=1).isoformat()
+                    dom_prev = [
+                        ("date", ">=", desde_mes),
+                        ("date", "<", emision.isoformat()),
+                        ("name", "ilike", "CERT-"),
+                        ("tax_line_id", "=", tid),
+                        ("partner_id", "=", pid),
+                        ("parent_state", "=", "posted"),
+                    ]
+                    prev_ids = models.execute_kw(db, uid, pwd, "account.move.line", "search", [dom_prev], {"limit": 1})
+                    had_prev = bool(prev_ids)
+                    prev_mes_cache[key] = had_prev
+                if not had_prev and tipo == "GANANCIAS":
+                    no_imponible = _no_imponible_param_por_concepto(tax_name)
+            except Exception:
+                # si falla, no bloqueamos el certificado
+                no_imponible = Decimal("0")
+
             cells: dict[str, tuple[str, str]] = {
+                # Título (celda mergeada A4:F5)
+                "A4": ("s", f"CERTIFICADO DE RETENCION - {tipo}"),
                 "F6": ("s", cert_nro),
                 "F7": ("n", str(_excel_date_serial(emision))),
                 "B15": ("s", prov_name),
@@ -824,7 +982,10 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "B24": ("s", nro_comp),
                 "B25": ("n", str(_excel_date_serial(emision))),
                 "B26": ("n", str(base)),
-                "B27": ("s", str(tax.get("name") or "")),
+                "B27": ("s", tax_name),
+                # Línea adicional debajo del concepto (entre B27 y la tabla): Monto NO imponible
+                "A29": ("s", "Monto NO imponible:"),
+                "B29": ("n", str(no_imponible)),
                 "D31": ("n", str(base)),
                 "E31": ("n", str(ali_frac)),
                 "F31": ("n", str(importe)),
@@ -836,9 +997,15 @@ def main(argv: Iterable[str] | None = None) -> int:
             out_xlsx = tmp / f"{cert_nro}.xlsx"
             _xlsx_set_cells_local_sheet(template_xlsx, out_xlsx=out_xlsx, cells=cells)
             _strip_local_drawings_and_comments(out_xlsx)
-            _add_signature_image_to_local_sheet(
+            _add_images_to_local_sheet(
                 out_xlsx,
-                signature_png=args.firma,
+                images=[
+                    # logo en encabezado (arriba izquierda)
+                    {"png": args.logo, "media_name": "logo.png", "anchor_cell": "A2", "width_emu": 2_600_000},
+                    # firma abajo derecha
+                    {"png": args.firma, "media_name": "firma.png", "anchor_cell": "E42", "width_emu": 1_650_000},
+                ],
+                drawing_rel_id="rIdSig",
             )
             out_pdf = out_dir / f"CERT-{_safe_filename_component(prov_name)}-{_last5_from_cert(cert_nro)}.pdf"
             _xlsx_to_pdf(out_xlsx, out_pdf)

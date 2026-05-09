@@ -29,6 +29,10 @@ python3 SICORE/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15
 python3 SICORE/run_quincena.py --desde 2026-04-16 --hasta 2026-04-30
 ```
 
+**Nota SICORE (layouts)**:
+- Default: `--layout estudio159` (el que suele pedir el estudio/contador).
+- Si el aplicativo SICORE está usando **Configuración → Importación de Retenciones → Formato Estándar v9.0**, usar `--layout estandar132`.
+
 SIRCAR (mismo criterio de fechas; el CUIT es el del **agente de retención**):
 
 ```bash
@@ -94,6 +98,7 @@ Firma digital (opcional):
 
 - Por defecto toma `CERTIFICADOS-RETENCION-PDF/firma.png` y la inserta en la hoja `LOCAL` antes de exportar el PDF.
 - Si querés otra imagen, usá `--firma /ruta/a/otra_firma.png`.
+ - Logo (opcional): por defecto toma `CERTIFICADOS-RETENCION-PDF/logo.png`. Si querés otro, usá `--logo /ruta/a/logo.png`.
 
 Debug:
 
