@@ -32,6 +32,12 @@ Salida: `PERCEIIBB/out/PERCEIIBB_ARCA_YYYY-MM-DD_a_YYYY-MM-DD.TXT`
 
 Opciones extra (`--jurisdiccion-sujeto`, `--cuota`, etc.) se reenvían al generador.
 
+## Planilla Excel del estudio (grilla con columnas tipo inscripción / CUIT / base / importe)
+
+Para generar un **XLSX** con la misma estructura que suele enviar el contador, usando en **Nro.Percepcion** el **número de comprobante fiscal** (trazabilidad desde Odoo en lugar de constancia que no está modelada), ver `exportador-excel/percepciones_iibb_ventas_estudio.py` y `exportador-excel/README.md`.
+
+Percepción **TCI multilateral** (otro impuesto de ventas): `exportador-excel/percepciones_tci_ventas_estudio.py`.
+
 ## Referencia de layout
 
 Tabla posicional provista por el estudio (percepciones 163); misma longitud que retenciones SIRCAR con la semántica indicada arriba.

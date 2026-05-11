@@ -67,6 +67,8 @@ Todos leen de `config_nakel.ODOO_CONFIG_MASTER_DEV` salvo anotación contraria.
 | `PERCEIIBB/generar_perceiibb_arca_master_dev.py` | `PERCEIIBB/out/PERCEIIBB_ARCA.TXT` | Percepciones IIBB ARCA (misma longitud que SIRCAR 163; campo 1 = `2`) |
 | `exportador-excel/retenciones_aplicadas_sircar_iibb.py` | `exportador-excel/out/retenciones_aplicadas_sircar_iibb_…xlsx` | Excel: retenciones aplicadas IIBB/SIRCAR (misma data que `RET-DGR-SIRCAR.TXT`) |
 | `exportador-excel/retenciones_sufridas_iibb.py` | `exportador-excel/out/retenciones_sufridas_iibb_…xlsx` | Excel: IIBB sufrida en compras (facturas proveedor `in_invoice/in_refund`) |
+| `exportador-excel/percepciones_iibb_ventas_estudio.py` | `exportador-excel/out/percepciones_iibb_ventas_estudio_…xlsx` | Excel: percepciones IIBB en ventas; columna **Nro.Percepcion** = nº fiscal (dígitos o `PV-número`) |
+| `exportador-excel/percepciones_tci_ventas_estudio.py` | `exportador-excel/out/percepciones_tci_ventas_estudio_…xlsx` | Excel: percepción **TCI multilateral** en ventas (impuesto `Percepcion MCR TCI Multilateral…`, patrón configurable) |
 
 ### Archivos
 
