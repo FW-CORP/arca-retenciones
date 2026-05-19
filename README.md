@@ -1,6 +1,6 @@
-# nakel_scripts
+# arca-retenciones
 
-Repositorio interno **FW-CORP / Nakel** para **scripts y utilidades** que no viven dentro de un módulo Odoo: exportaciones fiscales, informes puntuales, conversiones de layout, etc.
+Repositorio **FW-CORP / Nakel** para **retenciones y percepciones** (SICORE, SIRCAR, RGAN_CPA, certificados PDF, exportadores Excel) y utilidades relacionadas que no viven dentro de un módulo Odoo.
 
 Cada bloque de trabajo convive en **su propia carpeta** en la raíz (monorepo simple). Así se evita mezclar dependencias, documentación y convenciones de nombres entre proyectos distintos.
 
@@ -24,6 +24,6 @@ Cada bloque de trabajo convive en **su propia carpeta** en la raíz (monorepo si
 ## Clonar
 
 ```bash
-git clone git@github.com:FW-CORP/nakel_scripts.git
-cd nakel_scripts
+git clone git@github.com:FW-CORP/arca-retenciones.git
+cd arca-retenciones
 ```
