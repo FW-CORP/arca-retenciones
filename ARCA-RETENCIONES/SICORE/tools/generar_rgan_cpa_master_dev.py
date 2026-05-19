@@ -9,7 +9,9 @@ Layout inferido desde `ARCA-RETENCIONES/RGAN_CPA.TXT` (len 145 por línea):
   0:2    tipo_registro = "06"
   2:12   fecha_1 (10)  = dd/mm/yyyy alineado a derecha (día 1 dígito -> espacio)
   12:16  sucursal (4)  = "0001"
-  16:28  nro_orden (12)= correlativo (en el original coincide con otros TXT)
+  16:28  nro_orden (12)= **solo dígitos 0-9** (SIAP / muestras aceptadas). Con facturas
+         reconciliadas: PV(4)+NRO(8) desde ref de factura. Sin facturas: todos los
+         dígitos del nombre del pago en orden, `zfill(12)` y últimos 12 (sin letras PGAL/…).
   28:33  espacios (5)
   33:45  importe_total (12) con coma decimal y 3 decimales (ej " 9754137,410")
   45:53  codigo_8 (8)  = "02170781" (configurable)
@@ -88,15 +90,21 @@ def _abs_money(x: Any, q: Decimal) -> Decimal:
 def _digits_only(s: str) -> str:
     return re.sub(r"\D+", "", s or "")
 
-def _normalize_payment_name_no_separators(name: str, *, max_len: int = 12) -> str:
+
+def _nro_orden_12_rgan_solo_digitos(raw: str, fallback_id: int) -> str:
     """
-    Normaliza `account.payment.name` para usar como "nro_orden/nro_comprobante" sin separadores.
-    Ej: PGAL1/26-27/0370 -> PGAL126270370 -> recortado a 12 (layout RGAN_CPA usa 12).
+    Posiciones 17–28: exactamente 12 caracteres numéricos (0–9).
+    Evita letras (PGAL…, OP-X…) que rechaza SIAP en las muestras del estudio.
     """
-    if not name:
-        return ""
-    out = re.sub(r"[^A-Za-z0-9]+", "", str(name))
-    return out[:max_len]
+    d = _digits_only(str(raw or ""))
+    if d:
+        return d.zfill(12)[-12:]
+    try:
+        fid = int(fallback_id)
+    except Exception:
+        fid = 0
+    return str(fid).zfill(12)[-12:]
+
 
 def _fmt_date_ddmmyyyy_right(iso_date: str, width: int = 10) -> str:
     dt = datetime.strptime(iso_date, "%Y-%m-%d").date()
@@ -347,7 +355,7 @@ def generar(
                     out_lines.append(line[:145].ljust(145))
             else:
                 # fallback: sin facturas reconciliadas → comportamiento anterior (por pago)
-                nro_orden = _normalize_payment_name_no_separators(p.get("name") or "", max_len=12).rjust(12, "0") or str(pid).zfill(12)
+                nro_orden = _nro_orden_12_rgan_solo_digitos(str(p.get("name") or ""), pid)
                 imp_total = _abs_money(p.get("amount"), DEC3)
                 imp_total_s = _fmt_field_right(_fmt_num_coma(imp_total, decimals=3), 12)
                 base_s = _fmt_field_right(_fmt_num_coma(base_total, decimals=2), 13)
