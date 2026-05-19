@@ -24,9 +24,12 @@ python3 SICORE/run_quincena.py --desde 2026-04-01 --hasta 2026-04-15
 
 ### Documentación
 
+Carpeta: [`Documentacion/`](Documentacion/) (versionada en git; **no** está en `.gitignore`).
+
 - `Documentacion/arca-doc.md`: especificación SICORE 9.0 (posiciones/longitudes/reglas).
 - `Documentacion/ARCA_RETENCIONES_LAYOUTS_Y_MAPEO_ODOO.md`: guía unificada (layouts reales + mapeo a Odoo + scripts solo lectura).
 - `Documentacion/MANUAL_ARCA_RETENCIONES_QUINCENA.md`: **manual corto** (quincena / rango de fechas, comandos `run_quincena`).
+- `Documentacion/Flor-Canonicos/`: referencias del estudio (SICORE / SIRCAR-SIAP) aceptadas por importadores.
 - Plantillas de referencia del estudio (XLSX / capturas): `Documentacion/OP.xlsx`, `Documentacion/RET GAN 16-03.xlsx`, `Documentacion/RETIIBB.xlsx`, `Documentacion/Pasted Image.png`, `Documentacion/Formato de Importacion.pdf`.
 
 ### Uso habitual (certificado / quincena)
