@@ -58,6 +58,9 @@ except Exception as e:  # pragma: no cover
 
 DEC2 = Decimal("0.01")
 
+# Ganancias RG 830 + profesionales (escala), mismo criterio que RGAN_CPA.
+GANANCIAS_TAX_TYPES = ("earnings", "earnings_scale")
+
 # Longitudes totales (sin CRLF)
 LREG_ESTUDIO_159 = 159
 LREG_ESTANDAR_132 = 132
@@ -436,10 +439,12 @@ def generar(
         pwd,
         "account.tax",
         "search",
-        [[("l10n_ar_tax_type", "=", "earnings")]],
+        [[("l10n_ar_tax_type", "in", list(GANANCIAS_TAX_TYPES))]],
     )
     if not earn_tax_ids:
-        raise SystemExit("No hay impuestos con l10n_ar_tax_type='earnings' en la base.")
+        raise SystemExit(
+            "No hay impuestos Ganancias (l10n_ar_tax_type earnings / earnings_scale) en la base."
+        )
     earn_set = set(int(x) for x in earn_tax_ids)
 
     pay_domain = [
@@ -549,7 +554,7 @@ def generar(
             continue
         tid = int(l["tax_line_id"][0])
         tax = taxes.get(tid) or {}
-        if tid not in earn_set or tax.get("l10n_ar_tax_type") != "earnings":
+        if tid not in earn_set:
             continue
         pid = int(l["payment_id"][0])
         lines_by_payment.setdefault(pid, []).append(l)
@@ -702,7 +707,9 @@ def generar(
             out_lines.append(line)
 
     if not out_lines:
-        raise SystemExit("No se encontraron retenciones de Ganancias (earnings) en el rango.")
+        raise SystemExit(
+            "No se encontraron retenciones de Ganancias (earnings / earnings_scale) en el rango."
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="ascii", errors="replace", newline="") as f:

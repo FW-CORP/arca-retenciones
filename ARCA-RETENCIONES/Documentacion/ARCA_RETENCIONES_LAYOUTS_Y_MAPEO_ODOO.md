@@ -145,7 +145,7 @@ Este layout se parece al caso SICORE/Ganancias (código impuesto 0217) pero con 
 - `cuit13` observado: `80` + CUIT(11)
 
 **Origen en Odoo**:
-- mismas fuentes de retención, pero filtrando `account.tax.l10n_ar_tax_type == 'earnings'`.
+- mismas fuentes de retención, filtrando `l10n_ar_tax_type` en **`earnings`** y **`earnings_scale`** (830 profesionales).
 - nro_orden/nro_comprobante (si el estudio lo acepta): `account.payment.name` normalizado sin `/` ni `-` (y recortado/padded al ancho del layout).
 
 ### D) SIRCAR (ancho fijo 163)

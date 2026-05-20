@@ -77,7 +77,7 @@ Están en subcarpetas `tools/` para no mezclarlas con el generador principal:
 
 | Carpeta | Scripts | Uso típico |
 |---------|---------|------------|
-| `SICORE/tools/` | `generar_op_odoo_master_dev.py`, `generar_ret_gan_mayor_odoo_master_dev.py`, `generar_rgan_cpa_master_dev.py` | Planillas / mayores / layout alternativo Ganancias |
+| `SICORE/tools/` | `generar_op_odoo_master_dev.py`, `generar_ret_gan_mayor_odoo_master_dev.py`, `generar_rgan_cpa_master_dev.py` | Planillas / mayores / **RGAN_CPA** (Ganancias: `earnings` + `earnings_scale` / 830 Profesionales) |
 | `SIRCAR/tools/` | `generar_sircar_mayor_odoo_master_dev.py`, `generar_ret_iibb_mayor_odoo_master_dev.py`, `generar_ret_dgr_*.py` | CSV mayor, mayor IIBB, exports DGR |
 | `CERTIFICADOS-RETENCION-PDF/` | `generar_certificados_retencion_pdf_master_dev.py` | Generación masiva de **certificados PDF** (plantilla Excel → PDF) |
 

@@ -36,3 +36,7 @@ python3 exportador-excel/percepciones_tci_ventas_estudio.py --desde 2026-04-01 -
 
 Salidas: `exportador-excel/out/*.xlsx`
 
+### Control RGAN_CPA vs TXT
+
+`retenciones_ganancias_rgan_cpa.py` incluye columnas alineadas al layout del TXT (`nro_orden_txt`, `importe_total_fc_txt`, `base_imponible_txt`, **`importe_retenido_txt`**). Para validar: sumar **`importe_retenido_txt`** en Excel y comparar con la suma del campo retenido (pos. 79–93) del `RGAN_CPA_*.TXT`. Incluye `earnings` y `earnings_scale` (profesionales).
+

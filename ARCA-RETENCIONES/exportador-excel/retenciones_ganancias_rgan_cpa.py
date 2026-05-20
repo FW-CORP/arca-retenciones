@@ -5,11 +5,14 @@ Planilla XLSX: Retenciones de Ganancias (RGAN_CPA) por operación (factura).
 Fuente: Odoo master_dev (solo lectura) por XML-RPC.
 Criterio:
 - Pagos a proveedores con `l10n_ar_withholding_ids`.
-- Se filtra a impuestos Ganancias: `account.tax.l10n_ar_tax_type = earnings`.
+- Se filtra a impuestos Ganancias: `l10n_ar_tax_type` en `earnings` y `earnings_scale` (profesionales).
 - Se desagrega por factura reconciliada (`account.payment.reconciled_bill_ids`) y se prorratea
   base/retención según `amount_total` de cada factura (igual criterio que `RGAN_CPA_v2.TXT`).
 
 Salida: exportador-excel/out/retenciones_ganancias_rgan_cpa_<desde>_a_<hasta>.xlsx
+
+Columnas alineadas al TXT RGAN_CPA (posiciones fijas) para sumar `importe_retenido_txt`
+y comparar con el archivo generado por `SICORE/tools/generar_rgan_cpa_master_dev.py`.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from _xlsx import convert_csv_to_xlsx
 
 
 DEC2 = Decimal("0.01")
+GANANCIAS_TAX_TYPES = ("earnings", "earnings_scale")
 
 
 def _iso(s: str) -> str:
@@ -92,6 +96,7 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     prepend_config_nakel_sys_path(root)
     from config_nakel import ODOO_CONFIG_MASTER_DEV  # type: ignore
+    from SICORE.tools.generar_rgan_cpa_master_dev import _pv_nro_12_from_bill  # type: ignore
 
     models, uid = odoo_connect(ODOO_CONFIG_MASTER_DEV)
     db, pwd = ODOO_CONFIG_MASTER_DEV["db"], ODOO_CONFIG_MASTER_DEV["password"]
@@ -102,11 +107,13 @@ def main(argv: Iterable[str] | None = None) -> int:
         pwd,
         "account.tax",
         "search",
-        [[("l10n_ar_tax_type", "=", "earnings")]],
+        [[("l10n_ar_tax_type", "in", list(GANANCIAS_TAX_TYPES))]],
     )
     earn_tax_ids = [int(x) for x in earn_tax_ids]
     if not earn_tax_ids:
-        raise SystemExit("No hay impuestos con l10n_ar_tax_type='earnings' (Ganancias).")
+        raise SystemExit(
+            "No hay impuestos Ganancias (l10n_ar_tax_type earnings / earnings_scale)."
+        )
     earn_set = set(earn_tax_ids)
 
     pay_domain = [
@@ -175,10 +182,36 @@ def main(argv: Iterable[str] | None = None) -> int:
         "account.move.line",
         "read",
         [line_ids],
-        {"fields": ["id", "payment_id", "tax_line_id", "tax_base_amount", "balance", "credit"]},
+        {
+            "fields": [
+                "id",
+                "payment_id",
+                "tax_line_id",
+                "tax_base_amount",
+                "balance",
+                "credit",
+                "name",
+            ]
+        },
     )
 
-    # filtrar a earnings y agrupar por payment
+    tax_ids = sorted({int(l["tax_line_id"][0]) for l in lines if l.get("tax_line_id")})
+    taxes_by_id: dict[int, dict] = {}
+    if tax_ids:
+        taxes_by_id = {
+            int(t["id"]): t
+            for t in models.execute_kw(
+                db,
+                uid,
+                pwd,
+                "account.tax",
+                "read",
+                [tax_ids],
+                {"fields": ["name", "l10n_ar_tax_type"]},
+            )
+        }
+
+    # filtrar a Ganancias (earnings + earnings_scale) y agrupar por payment
     lines_by_payment: dict[int, list[dict]] = {}
     for l in lines:
         if not l.get("tax_line_id"):
@@ -197,17 +230,26 @@ def main(argv: Iterable[str] | None = None) -> int:
     out_xlsx = out_dir / f"retenciones_ganancias_rgan_cpa_{args.desde}_a_{args.hasta}.xlsx"
 
     headers = [
-        "fecha",
+        "fecha_txt",
+        "fecha_pago",
+        "pago",
         "proveedor",
         "cuit",
-        "base_imponible_ganancias",
+        "factura_ref",
+        "nro_orden_txt",
+        "importe_total_fc_txt",
+        "base_imponible_txt",
+        "importe_retenido_txt",
         "rg",
         "alicuota_percent",
-        "importe_retencion",
+        "impuesto",
+        "tipo_impuesto_odoo",
+        "certificado",
     ]
 
     tot_base = Decimal("0.00")
     tot_ret = Decimal("0.00")
+    tot_fc = Decimal("0.00")
 
     with tmp_csv.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
@@ -223,52 +265,89 @@ def main(argv: Iterable[str] | None = None) -> int:
             partner = partners.get(partner_id, {})
             prov_name = str(partner.get("name") or "")
             prov_cuit = cuit11_from_partner(partner)
-            fecha = _ddmmyyyy(str(p.get("date") or ""))
+            fecha_txt = _ddmmyyyy(str(p.get("date") or ""))
+            fecha_iso = str(p.get("date") or "")
+            pay_name = str(p.get("name") or "")
 
             bill_list = [bills_by_id.get(int(bid), {}) for bid in (p.get("reconciled_bill_ids") or [])]
             bill_list = [b for b in bill_list if b and (b.get("move_type") in ("in_invoice", "in_refund"))]
             weights = [_abs_money(b.get("amount_total")) for b in bill_list]
 
+            def _write_row(
+                *,
+                bill: dict | None,
+                base: Decimal,
+                reten: Decimal,
+                tax_id: int,
+                cert: str,
+            ) -> None:
+                nonlocal tot_base, tot_ret, tot_fc
+                tax = taxes_by_id.get(tax_id, {})
+                fc_total = _abs_money(bill.get("amount_total")) if bill else Decimal("0.00")
+                factura_ref = ""
+                nro_orden = ""
+                if bill:
+                    factura_ref = str(bill.get("ref") or bill.get("name") or "")
+                    nro_orden = _pv_nro_12_from_bill(bill)
+                tot_base += base
+                tot_ret += reten
+                tot_fc += fc_total
+                w.writerow(
+                    [
+                        fecha_txt,
+                        fecha_iso,
+                        pay_name,
+                        prov_name,
+                        prov_cuit,
+                        factura_ref,
+                        nro_orden,
+                        f"{fc_total:.2f}",
+                        f"{base:.2f}",
+                        f"{reten:.2f}",
+                        str(args.rg).zfill(3)[:3],
+                        f"{_calc_alicuota_percent(base, reten):.2f}",
+                        str(tax.get("name") or ""),
+                        str(tax.get("l10n_ar_tax_type") or ""),
+                        cert,
+                    ]
+                )
+
             for l in sorted(wlines, key=lambda r: int(r["id"])):
+                tid = int(l["tax_line_id"][0]) if l.get("tax_line_id") else 0
                 base_total = _abs_money(l.get("tax_base_amount"))
                 ret_total = _abs_money(l.get("credit") or l.get("balance") or 0)
                 if ret_total == Decimal("0.00"):
                     ret_total = _abs_money(l.get("balance"))
+                cert = str(l.get("name") or "")
 
                 if bill_list:
                     base_parts = _alloc_by_weights(base_total, weights)
                     ret_parts = _alloc_by_weights(ret_total, weights)
-                    for bp, rp in zip(base_parts, ret_parts, strict=False):
-                        tot_base += bp
-                        tot_ret += rp
-                        w.writerow(
-                            [
-                                fecha,
-                                prov_name,
-                                prov_cuit,
-                                f"{bp:.2f}",
-                                str(args.rg).zfill(3)[:3],
-                                f"{_calc_alicuota_percent(bp, rp):.2f}",
-                                f"{rp:.2f}",
-                            ]
-                        )
+                    for bill, bp, rp in zip(bill_list, base_parts, ret_parts, strict=False):
+                        _write_row(bill=bill, base=bp, reten=rp, tax_id=tid, cert=cert)
                 else:
-                    tot_base += base_total
-                    tot_ret += ret_total
-                    w.writerow(
-                        [
-                            fecha,
-                            prov_name,
-                            prov_cuit,
-                            f"{base_total:.2f}",
-                            str(args.rg).zfill(3)[:3],
-                            f"{_calc_alicuota_percent(base_total, ret_total):.2f}",
-                            f"{ret_total:.2f}",
-                        ]
-                    )
+                    _write_row(bill=None, base=base_total, reten=ret_total, tax_id=tid, cert=cert)
 
-        # Totales
-        w.writerow(["", "TOTALES", "", f"{tot_base:.2f}", "", "", f"{tot_ret:.2f}"])
+        # Totales (sumar columna importe_retenido_txt = crédito Odoo / TXT)
+        w.writerow(
+            [
+                "",
+                "",
+                "TOTALES",
+                "",
+                "",
+                "",
+                "",
+                f"{tot_fc:.2f}",
+                f"{tot_base:.2f}",
+                f"{tot_ret:.2f}",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ]
+        )
 
     out = convert_csv_to_xlsx(tmp_csv, out_xlsx)
     print(f"OK: {out}")

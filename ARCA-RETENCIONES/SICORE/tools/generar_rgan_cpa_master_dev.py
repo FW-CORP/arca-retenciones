@@ -28,7 +28,8 @@ Layout inferido desde `ARCA-RETENCIONES/RGAN_CPA.TXT` (len 145 por línea):
 
 Fuente en Odoo:
 - Retenciones en pagos: `account.payment.l10n_ar_withholding_ids` (account.move.line)
-- Ganancias: `account.tax.l10n_ar_tax_type == 'earnings'`
+- Ganancias: `account.tax.l10n_ar_tax_type` en `earnings` (830 bienes, locaciones, etc.)
+  y `earnings_scale` (830 profesionales / escala).
 """
 
 from __future__ import annotations
@@ -72,6 +73,9 @@ except Exception as e:  # pragma: no cover
 
 DEC2 = Decimal("0.01")
 DEC3 = Decimal("0.001")
+
+# Tipos de impuesto Odoo incluidos en RGAN_CPA (mismo criterio que planilla del estudio).
+GANANCIAS_TAX_TYPES = ("earnings", "earnings_scale")
 
 
 def _d(x: Any) -> Decimal:
@@ -206,17 +210,19 @@ def generar(
     models, uid = odoo_connect(cfg)
     db, pwd = cfg["db"], cfg["password"]
 
-    # taxes ganancias
+    # Impuestos Ganancias (830 + profesionales / escala)
     tax_ids: list[int] = models.execute_kw(
         db,
         uid,
         pwd,
         "account.tax",
         "search",
-        [[("l10n_ar_tax_type", "=", "earnings")]],
+        [[("l10n_ar_tax_type", "in", list(GANANCIAS_TAX_TYPES))]],
     )
     if not tax_ids:
-        raise SystemExit("No hay impuestos con l10n_ar_tax_type='earnings' en la base.")
+        raise SystemExit(
+            "No hay impuestos Ganancias (l10n_ar_tax_type earnings / earnings_scale) en la base."
+        )
     earn_set = set(int(x) for x in tax_ids)
 
     pay_domain = [
@@ -382,7 +388,9 @@ def generar(
                 out_lines.append(line[:145].ljust(145))
 
     if not out_lines:
-        raise SystemExit("No se encontraron retenciones de Ganancias (earnings) en el rango.")
+        raise SystemExit(
+            "No se encontraron retenciones de Ganancias (earnings / earnings_scale) en el rango."
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8", newline="") as f:
